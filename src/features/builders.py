@@ -101,6 +101,42 @@ def build_market_features(
         out["delta_proxy_std_20"] = grouped["delta_proxy"].transform(lambda s: s.rolling(20).std())
 
     # --------------------------------
+    # Technical indicators
+    # --------------------------------
+    if feature_flags.get("technical_indicators", False):
+        # Rolling VWAP over short/medium windows.
+        for w in [10, 20]:
+            pv_roll = grouped.apply(
+                lambda g: (g["close"] * g["volume"]).rolling(w).sum()
+            ).reset_index(level=0, drop=True)
+            vol_roll = grouped["volume"].transform(lambda s: s.rolling(w).sum())
+            vwap_col = f"vwap_{w}"
+            out[vwap_col] = pv_roll / vol_roll.replace(0, np.nan)
+            out[f"vwap_dist_{w}"] = out["close"] / out[vwap_col].replace(0, np.nan) - 1.0
+
+        # ATR and normalized ATR proxies.
+        prev_close = grouped["close"].shift(1)
+        tr = pd.concat(
+            [
+                out["high"] - out["low"],
+                (out["high"] - prev_close).abs(),
+                (out["low"] - prev_close).abs(),
+            ],
+            axis=1,
+        ).max(axis=1)
+        out["tr"] = tr
+        out["atr_14"] = grouped["tr"].transform(lambda s: s.rolling(14).mean())
+        out["natr_14"] = out["atr_14"] / out["close"].replace(0, np.nan)
+
+        # EMA trend and slope features.
+        ema_12 = grouped["close"].transform(lambda s: s.ewm(span=12, adjust=False).mean())
+        ema_26 = grouped["close"].transform(lambda s: s.ewm(span=26, adjust=False).mean())
+        out["ema_fast_12"] = ema_12
+        out["ema_slow_26"] = ema_26
+        out["ema_spread_12_26"] = (ema_12 - ema_26) / out["close"].replace(0, np.nan)
+        out["ema_fast_slope_3"] = grouped["ema_fast_12"].transform(lambda s: s.diff(3))
+
+    # --------------------------------
     # Effort vs result
     # --------------------------------
     if feature_flags.get("effort_result", True):

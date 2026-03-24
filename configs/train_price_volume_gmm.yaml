@@ -63,6 +63,18 @@ validation:
   train_min_size: 20000
   test_size: 5000
 
+trading:
+  enabled: true
+  selection_mode: "threshold"  # threshold | top_k_per_timestamp
+  top_k_per_timestamp: 5
+  prediction_threshold: 0.001
+  optimize_threshold: true
+  optimize_objective: "trading_total_net_return"
+  threshold_grid: [0.0, 0.0005, 0.001, 0.0015, 0.002, 0.003]
+  transaction_cost_bps: 2.0
+  periods_per_year: 6552
+  recommendations_top_k: 10
+
 artifacts:
   output_dir: "models/snapshots/price_volume_gmm"
   fold_predictions_dir: "data/processed/fold_predictions_price_volume_gmm"

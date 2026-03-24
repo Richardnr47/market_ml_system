@@ -57,6 +57,27 @@ def select_feature_columns(df_columns, feature_flags: dict) -> list[str]:
             ]
         )
 
+    if feature_flags.get("technical_indicators", False):
+        selected.extend(
+            [
+                c
+                for c in [
+                    "vwap_10",
+                    "vwap_20",
+                    "vwap_dist_10",
+                    "vwap_dist_20",
+                    "tr",
+                    "atr_14",
+                    "natr_14",
+                    "ema_fast_12",
+                    "ema_slow_26",
+                    "ema_spread_12_26",
+                    "ema_fast_slope_3",
+                ]
+                if c in df_columns
+            ]
+        )
+
     # preserve order and uniqueness
     seen = set()
     ordered_unique = []

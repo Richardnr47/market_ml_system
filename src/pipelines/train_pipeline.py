@@ -18,7 +18,9 @@ from src.modeling.evaluation import (
     baseline_metrics,
     correlation_metrics,
     directional_metrics,
+    optimize_long_only_threshold,
     regression_metrics,
+    trading_metrics,
 )
 from src.modeling.importance import extract_feature_importance
 from src.modeling.predictors import LGBMReturnPredictor
@@ -66,6 +68,30 @@ def run_train_pipeline(config_path: str) -> dict:
 
         feature_flags = cfg["features"]["include"]
         state_enabled = cfg["state_model"].get("enabled", True)
+        trading_cfg = cfg.get("trading", {})
+        trading_enabled = trading_cfg.get("enabled", True)
+        trading_threshold = float(trading_cfg.get("prediction_threshold", 0.001))
+        trading_cost_bps = float(trading_cfg.get("transaction_cost_bps", 2.0))
+        trading_periods_per_year = int(trading_cfg.get("periods_per_year", 252 * 26))
+        # Strategy is intentionally fixed to long-only.
+        trading_long_only = True
+        trading_selection_mode = str(trading_cfg.get("selection_mode", "threshold"))
+        trading_top_k_per_timestamp = int(trading_cfg.get("top_k_per_timestamp", 5))
+        trading_optimize_threshold = bool(trading_cfg.get("optimize_threshold", True))
+        trading_optimize_objective = str(
+            trading_cfg.get("optimize_objective", "trading_total_net_return")
+        )
+        trading_threshold_grid = [
+            float(x) for x in trading_cfg.get("threshold_grid", [0.0, 0.0005, 0.001, 0.0015, 0.002, 0.003])
+        ]
+        recommendations_top_k = int(trading_cfg.get("recommendations_top_k", 10))
+
+        if trading_cfg.get("long_only", True) is not True:
+            dbg.warning(
+                "TRADING",
+                f"Config requested long_only={trading_cfg.get('long_only')} "
+                "but strategy is fixed to long-only",
+            )
 
         with dbg.timer("DATA", "Parsing and sorting timestamps"):
             df[timestamp_col] = pd.to_datetime(df[timestamp_col])
@@ -170,6 +196,20 @@ def run_train_pipeline(config_path: str) -> dict:
                 dbg.log("WINDOWS", f"timestamps shape: {ts.shape}")
                 dbg.log("WINDOWS", f"tickers shape: {tickers.shape}")
 
+        # Keep all ticker windows in global chronological order before validation.
+        with dbg.timer("WINDOWS", "Sorting window samples by timestamp"):
+            ts_series = pd.to_datetime(pd.Series(ts), utc=True)
+            ts = ts_series.dt.tz_localize(None).to_numpy()
+            sort_order = np.argsort(ts, kind="stable")
+
+            X_flat = X_flat[sort_order]
+            y = y[sort_order]
+            ts = ts[sort_order]
+            tickers = tickers[sort_order]
+
+            dbg.log("WINDOWS", f"Sorted window timestamp range: {ts[0]} -> {ts[-1]}")
+            dbg.log("WINDOWS", f"Unique window timestamps: {pd.Index(ts).nunique()}")
+
         # -------------------------------------------------
         # Feature names
         # -------------------------------------------------
@@ -201,6 +241,7 @@ def run_train_pipeline(config_path: str) -> dict:
                 train_min_size=cfg["validation"]["train_min_size"],
                 test_size=cfg["validation"]["test_size"],
                 n_splits=cfg["validation"]["n_splits"],
+                timestamps=ts,
                 logger=logger,
             )
 
@@ -221,6 +262,12 @@ def run_train_pipeline(config_path: str) -> dict:
         final_state_model = None
         final_predictor = None
         importance_df = None
+        final_fold_pred_df: pd.DataFrame | None = None
+        oof_y_true: list[np.ndarray] = []
+        oof_y_pred: list[np.ndarray] = []
+        oof_tickers: list[np.ndarray] = []
+        oof_timestamps: list[np.ndarray] = []
+        optimized_threshold = trading_threshold
 
         with mlflow.start_run():
             dbg.log("MLFLOW", "Started MLflow run")
@@ -234,6 +281,14 @@ def run_train_pipeline(config_path: str) -> dict:
                     "n_feature_cols": len(feature_cols),
                     "n_flat_features": len(flat_feature_names),
                     "feature_flags": str(feature_flags),
+                    "trading_enabled": trading_enabled,
+                    "trading_threshold": trading_threshold,
+                    "trading_cost_bps": trading_cost_bps,
+                    "trading_long_only": trading_long_only,
+                    "trading_selection_mode": trading_selection_mode,
+                    "trading_top_k_per_timestamp": trading_top_k_per_timestamp,
+                    "trading_optimize_threshold": trading_optimize_threshold,
+                    "trading_optimize_objective": trading_optimize_objective,
                 }
             )
 
@@ -311,12 +366,34 @@ def run_train_pipeline(config_path: str) -> dict:
                         base_metrics = baseline_metrics(y_test, y_train, logger=logger)
                         dir_metrics = directional_metrics(y_test, preds, logger=logger)
                         corr_metrics = correlation_metrics(y_test, preds, logger=logger)
+                        if trading_enabled:
+                            trade_metrics, trade_arrays = trading_metrics(
+                                y_true=y_test,
+                                y_pred=preds,
+                                tickers=tickers_test,
+                                timestamps=ts_test,
+                                threshold=trading_threshold,
+                                transaction_cost_bps=trading_cost_bps,
+                                periods_per_year=trading_periods_per_year,
+                                selection_mode=trading_selection_mode,
+                                top_k_per_timestamp=trading_top_k_per_timestamp,
+                                logger=logger,
+                            )
+                        else:
+                            trade_metrics = {}
+                            trade_arrays = {
+                                "signal": np.zeros_like(y_test, dtype=int),
+                                "gross_return": np.zeros_like(y_test, dtype=float),
+                                "cost_return": np.zeros_like(y_test, dtype=float),
+                                "net_return": np.zeros_like(y_test, dtype=float),
+                            }
 
                         metrics = {
                             **reg_metrics,
                             **base_metrics,
                             **dir_metrics,
                             **corr_metrics,
+                            **trade_metrics,
                             "fold": fold_idx,
                             "train_size": int(len(X_train)),
                             "test_size": int(len(X_test)),
@@ -335,6 +412,18 @@ def run_train_pipeline(config_path: str) -> dict:
                     )
 
                     with dbg.timer("SAVE", f"Fold {fold_idx} save predictions"):
+                        signal_arr = np.zeros_like(y_test, dtype=int)
+                        gross_return_arr = np.zeros_like(y_test, dtype=float)
+                        cost_return_arr = np.zeros_like(y_test, dtype=float)
+                        net_return_arr = np.zeros_like(y_test, dtype=float)
+
+                        if trading_enabled:
+                            sorted_index = trade_arrays["sorted_index"]
+                            signal_arr[sorted_index] = trade_arrays["signal"]
+                            gross_return_arr[sorted_index] = trade_arrays["gross_return"]
+                            cost_return_arr[sorted_index] = trade_arrays["cost_return"]
+                            net_return_arr[sorted_index] = trade_arrays["net_return"]
+
                         fold_pred_df = pd.DataFrame(
                             {
                                 "fold": fold_idx,
@@ -344,6 +433,16 @@ def run_train_pipeline(config_path: str) -> dict:
                                 "y_pred": preds,
                                 "y_true_sign": (y_test > 0).astype(int),
                                 "y_pred_sign": (preds > 0).astype(int),
+                                "signal": signal_arr,
+                                "signal_action": np.where(
+                                    signal_arr > 0,
+                                    "long",
+                                    np.where(signal_arr < 0, "short", "flat"),
+                                ),
+                                "expected_edge": preds - trading_threshold,
+                                "gross_return": gross_return_arr,
+                                "cost_return": cost_return_arr,
+                                "net_return": net_return_arr,
                                 "pred_error": preds - y_test,
                                 "abs_error": np.abs(preds - y_test),
                             }
@@ -354,6 +453,12 @@ def run_train_pipeline(config_path: str) -> dict:
                         pred_path = pred_dir / f"fold_{fold_idx}_predictions.{pred_format}"
 
                         save_dataframe(fold_pred_df, pred_path, logger=logger)
+                        final_fold_pred_df = fold_pred_df.copy()
+
+                    oof_y_true.append(y_test)
+                    oof_y_pred.append(preds)
+                    oof_tickers.append(tickers_test)
+                    oof_timestamps.append(ts_test)
 
                     final_state_model = state_model
                     final_predictor = predictor
@@ -365,6 +470,48 @@ def run_train_pipeline(config_path: str) -> dict:
             # -------------------------------------------------
             # Summary after all folds
             # -------------------------------------------------
+            optimized_trade_metrics: dict[str, float] | None = None
+            threshold_search_df: pd.DataFrame | None = None
+            if trading_enabled and trading_optimize_threshold and oof_y_true:
+                with dbg.timer("TRADING", "Optimizing prediction threshold on OOF folds"):
+                    y_oof = np.concatenate(oof_y_true)
+                    pred_oof = np.concatenate(oof_y_pred)
+                    tickers_oof = np.concatenate(oof_tickers)
+                    ts_oof = np.concatenate(oof_timestamps)
+
+                    (
+                        optimized_threshold,
+                        optimized_trade_metrics,
+                        threshold_search_df,
+                    ) = optimize_long_only_threshold(
+                        y_true=y_oof,
+                        y_pred=pred_oof,
+                        tickers=tickers_oof,
+                        timestamps=ts_oof,
+                        transaction_cost_bps=trading_cost_bps,
+                        periods_per_year=trading_periods_per_year,
+                        selection_mode=trading_selection_mode,
+                        top_k_per_timestamp=trading_top_k_per_timestamp,
+                        thresholds=trading_threshold_grid,
+                        objective=trading_optimize_objective,
+                        logger=logger,
+                    )
+
+                    dbg.log(
+                        "TRADING",
+                        (
+                            f"Optimized threshold={optimized_threshold:.6f} "
+                            f"objective={trading_optimize_objective} "
+                            f"value={optimized_trade_metrics.get(trading_optimize_objective, np.nan):.6f}"
+                        ),
+                    )
+
+                    if threshold_search_df is not None:
+                        search_path = (
+                            Path(cfg["artifacts"]["output_dir"]) / "threshold_search.csv"
+                        )
+                        save_dataframe(threshold_search_df, search_path, logger=logger)
+
             with dbg.timer("SUMMARY", "Aggregating fold metrics"):
                 avg_mae = float(np.mean([m["mae"] for m in all_fold_metrics]))
                 avg_r2 = float(np.mean([m["r2"] for m in all_fold_metrics]))
@@ -379,6 +526,28 @@ def run_train_pipeline(config_path: str) -> dict:
                 avg_baseline_mean_mae = float(
                     np.mean([m["baseline_mean_mae"] for m in all_fold_metrics])
                 )
+                if trading_enabled:
+                    avg_trading_total_net_return = float(
+                        np.nanmean([m["trading_total_net_return"] for m in all_fold_metrics])
+                    )
+                    avg_trading_sharpe = float(
+                        np.nanmean([m["trading_sharpe"] for m in all_fold_metrics])
+                    )
+                    avg_trading_max_drawdown = float(
+                        np.nanmean([m["trading_max_drawdown"] for m in all_fold_metrics])
+                    )
+                    avg_trading_trade_count = float(
+                        np.nanmean([m["trading_trade_count"] for m in all_fold_metrics])
+                    )
+                    avg_trading_win_rate = float(
+                        np.nanmean([m["trading_win_rate"] for m in all_fold_metrics])
+                    )
+                else:
+                    avg_trading_total_net_return = np.nan
+                    avg_trading_sharpe = np.nan
+                    avg_trading_max_drawdown = np.nan
+                    avg_trading_trade_count = np.nan
+                    avg_trading_win_rate = np.nan
 
                 summary = {
                     "avg_mae": avg_mae,
@@ -388,10 +557,33 @@ def run_train_pipeline(config_path: str) -> dict:
                     "avg_spearman_corr": avg_spearman_corr,
                     "avg_baseline_zero_mae": avg_baseline_zero_mae,
                     "avg_baseline_mean_mae": avg_baseline_mean_mae,
+                    "avg_trading_total_net_return": avg_trading_total_net_return,
+                    "avg_trading_sharpe": avg_trading_sharpe,
+                    "avg_trading_max_drawdown": avg_trading_max_drawdown,
+                    "avg_trading_trade_count": avg_trading_trade_count,
+                    "avg_trading_win_rate": avg_trading_win_rate,
                     "n_folds": len(all_fold_metrics),
                     "feature_cols": feature_cols,
                     "state_model_enabled": state_enabled,
+                    "trading_enabled": trading_enabled,
+                    "trading_threshold_used": trading_threshold,
+                    "trading_optimized_threshold": optimized_threshold,
+                    "trading_selection_mode": trading_selection_mode,
                 }
+
+                if optimized_trade_metrics is not None:
+                    summary["optimized_trading_total_net_return"] = float(
+                        optimized_trade_metrics["trading_total_net_return"]
+                    )
+                    summary["optimized_trading_sharpe"] = float(
+                        optimized_trade_metrics["trading_sharpe"]
+                    )
+                    summary["optimized_trading_max_drawdown"] = float(
+                        optimized_trade_metrics["trading_max_drawdown"]
+                    )
+                    summary["optimized_trading_win_rate"] = float(
+                        optimized_trade_metrics["trading_win_rate"]
+                    )
 
                 dbg.log("SUMMARY", f"avg_mae={avg_mae:.6f}")
                 dbg.log("SUMMARY", f"avg_r2={avg_r2:.6f}")
@@ -400,6 +592,26 @@ def run_train_pipeline(config_path: str) -> dict:
                 dbg.log("SUMMARY", f"avg_spearman_corr={avg_spearman_corr:.6f}")
                 dbg.log("SUMMARY", f"avg_baseline_zero_mae={avg_baseline_zero_mae:.6f}")
                 dbg.log("SUMMARY", f"avg_baseline_mean_mae={avg_baseline_mean_mae:.6f}")
+                if trading_enabled:
+                    dbg.log("SUMMARY", f"avg_trading_total_net_return={avg_trading_total_net_return:.6f}")
+                    dbg.log("SUMMARY", f"avg_trading_sharpe={avg_trading_sharpe:.6f}")
+                    dbg.log("SUMMARY", f"avg_trading_max_drawdown={avg_trading_max_drawdown:.6f}")
+                    dbg.log("SUMMARY", f"avg_trading_trade_count={avg_trading_trade_count:.2f}")
+                    dbg.log("SUMMARY", f"avg_trading_win_rate={avg_trading_win_rate:.6f}")
+                    dbg.log("SUMMARY", f"trading_threshold_used={trading_threshold:.6f}")
+                    dbg.log("SUMMARY", f"trading_optimized_threshold={optimized_threshold:.6f}")
+                    if optimized_trade_metrics is not None:
+                        dbg.log(
+                            "SUMMARY",
+                            (
+                                "optimized_trading_total_net_return="
+                                f"{optimized_trade_metrics['trading_total_net_return']:.6f}"
+                            ),
+                        )
+                        dbg.log(
+                            "SUMMARY",
+                            f"optimized_trading_sharpe={optimized_trade_metrics['trading_sharpe']:.6f}",
+                        )
                 dbg.log("SUMMARY", f"n_folds={len(all_fold_metrics)}")
 
                 mlflow.log_metrics(
@@ -411,11 +623,98 @@ def run_train_pipeline(config_path: str) -> dict:
                         "avg_spearman_corr": avg_spearman_corr,
                         "avg_baseline_zero_mae": avg_baseline_zero_mae,
                         "avg_baseline_mean_mae": avg_baseline_mean_mae,
+                        "avg_trading_total_net_return": avg_trading_total_net_return,
+                        "avg_trading_sharpe": avg_trading_sharpe,
+                        "avg_trading_max_drawdown": avg_trading_max_drawdown,
+                        "avg_trading_trade_count": avg_trading_trade_count,
+                        "avg_trading_win_rate": avg_trading_win_rate,
+                        "trading_threshold_used": trading_threshold,
+                        "trading_optimized_threshold": optimized_threshold,
                     }
                 )
 
+                if optimized_trade_metrics is not None:
+                    mlflow.log_metrics(
+                        {
+                            "optimized_trading_total_net_return": float(
+                                optimized_trade_metrics["trading_total_net_return"]
+                            ),
+                            "optimized_trading_sharpe": float(
+                                optimized_trade_metrics["trading_sharpe"]
+                            ),
+                            "optimized_trading_max_drawdown": float(
+                                optimized_trade_metrics["trading_max_drawdown"]
+                            ),
+                            "optimized_trading_win_rate": float(
+                                optimized_trade_metrics["trading_win_rate"]
+                            ),
+                        }
+                    )
+
             if runtime_cfg.get("show_fold_table", True):
                 log_fold_summary(logger=logger, fold_metrics=all_fold_metrics, enabled=True)
+
+            if trading_enabled and final_fold_pred_df is not None and not final_fold_pred_df.empty:
+                with dbg.timer("TRADING", "Building top-picks recommendations"):
+                    recommendation_threshold = optimized_threshold
+                    latest_ts = final_fold_pred_df["timestamp"].max()
+                    latest_slice = final_fold_pred_df[final_fold_pred_df["timestamp"] == latest_ts].copy()
+
+                    latest_slice = latest_slice.sort_values("y_pred", ascending=False)
+                    if trading_selection_mode == "top_k_per_timestamp":
+                        long_candidates = latest_slice[
+                            latest_slice["y_pred"] > recommendation_threshold
+                        ].head(recommendations_top_k)
+                    else:
+                        long_candidates = latest_slice[
+                            latest_slice["y_pred"] > recommendation_threshold
+                        ].head(recommendations_top_k)
+
+                    if not long_candidates.empty:
+                        rec_df = long_candidates[
+                            [
+                                "timestamp",
+                                "ticker",
+                                "y_pred",
+                                "expected_edge",
+                                "signal",
+                                "signal_action",
+                            ]
+                        ].copy()
+                        rec_df = rec_df.rename(columns={"y_pred": "predicted_return"})
+                        rec_df["expected_edge"] = rec_df["predicted_return"] - recommendation_threshold
+                        rec_df["threshold_used"] = recommendation_threshold
+                    else:
+                        rec_df = pd.DataFrame(
+                            columns=[
+                                "timestamp",
+                                "ticker",
+                                "predicted_return",
+                                "expected_edge",
+                                "signal",
+                                "signal_action",
+                                "threshold_used",
+                            ]
+                        )
+
+                    rec_path = (
+                        Path(cfg["artifacts"]["output_dir"]) / "latest_recommendations.csv"
+                    )
+                    save_dataframe(rec_df, rec_path, logger=logger)
+
+                    summary["recommendation_timestamp"] = str(latest_ts)
+                    summary["recommendation_count"] = int(len(rec_df))
+                    summary["top_recommendation_tickers"] = rec_df["ticker"].tolist()
+                    summary["recommendation_threshold_used"] = recommendation_threshold
+
+                    if not rec_df.empty:
+                        dbg.log("TRADING", "Top recommendations:")
+                        dbg.log("TRADING", rec_df.to_string(index=False))
+                    else:
+                        dbg.log(
+                            "TRADING",
+                            "No long recommendations passed threshold on latest timestamp",
+                        )
 
             # -------------------------------------------------
             # Feature importance
