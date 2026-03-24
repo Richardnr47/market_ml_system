@@ -41,6 +41,7 @@ src/pipelines/train_pipeline.py
 src/registry/__init__.py
 src/registry/artifact_store.py
 src/utils/__init__.py
+src/utils/debug.py
 src/utils/logging.py
 src/utils/mlflow_utils.py
 src/utils/paths.py

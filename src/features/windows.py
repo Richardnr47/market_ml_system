@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
+import logging
 
 
 @dataclass
@@ -19,12 +20,13 @@ def make_windows(
     timestamp_col: str,
     window_size: int,
     stride: int = 1,
+    logger: logging.Logger | None = None,
 ) -> WindowBatch:
-    print("[WINDOWS] Starting rolling window creation...")
-    print(f"[WINDOWS] Input rows: {len(df)}")
-    print(f"[WINDOWS] Number of feature columns: {len(feature_cols)}")
-    print(f"[WINDOWS] window_size={window_size}, stride={stride}")
-    print(f"[WINDOWS] target_col={target_col}, timestamp_col={timestamp_col}")
+    if logger:
+        logger.info("[WINDOWS] Starting rolling window creation...")
+        logger.info("[WINDOWS] Input rows: %s", len(df))
+        logger.info("[WINDOWS] Number of feature columns: %s", len(feature_cols))
+        logger.info("[WINDOWS] window_size=%s stride=%s", window_size, stride)
 
     X_values = df[feature_cols].to_numpy(dtype=float)
     y_values = df[target_col].to_numpy(dtype=float)
@@ -46,26 +48,28 @@ def make_windows(
         ts_list.append(ts_val)
 
     if not X_list:
-        raise ValueError("[WINDOWS] No valid windows were created")
+        raise ValueError("No valid windows were created")
 
     X = np.stack(X_list)
     y = np.array(y_list, dtype=float)
     ts = np.array(ts_list)
 
-    print(f"[WINDOWS] Finished window creation")
-    print(f"[WINDOWS] X shape: {X.shape}")
-    print(f"[WINDOWS] y shape: {y.shape}")
-    print(f"[WINDOWS] timestamps shape: {ts.shape}")
+    if logger:
+        logger.info("[WINDOWS] X shape: %s", X.shape)
+        logger.info("[WINDOWS] y shape: %s", y.shape)
+        logger.info("[WINDOWS] timestamps shape: %s", ts.shape)
 
     return WindowBatch(X=X, y=y, timestamps=ts, feature_names=feature_cols)
 
 
-def flatten_windows(X: np.ndarray) -> np.ndarray:
-    print("[WINDOWS] Flattening windows...")
+def flatten_windows(X: np.ndarray, logger: logging.Logger | None = None) -> np.ndarray:
     if X.ndim != 3:
-        raise ValueError(f"[WINDOWS] Expected 3D array, got shape {X.shape}")
+        raise ValueError(f"Expected 3D array, got shape {X.shape}")
 
     n, w, f = X.shape
     out = X.reshape(n, w * f)
-    print(f"[WINDOWS] Flattened shape: {out.shape}")
+
+    if logger:
+        logger.info("[WINDOWS] Flattened shape: %s", out.shape)
+
     return out

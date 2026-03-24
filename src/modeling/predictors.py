@@ -1,5 +1,6 @@
 import lightgbm as lgb
 import numpy as np
+import logging
 
 
 class LGBMReturnPredictor:
@@ -12,8 +13,9 @@ class LGBMReturnPredictor:
         subsample: float,
         colsample_bytree: float,
         random_state: int,
+        logger: logging.Logger | None = None,
     ) -> None:
-        print("[PREDICTOR] Initializing LightGBM predictor...")
+        self.logger = logger
         self.model = lgb.LGBMRegressor(
             objective="regression",
             learning_rate=learning_rate,
@@ -25,16 +27,21 @@ class LGBMReturnPredictor:
             random_state=random_state,
         )
 
+        if self.logger:
+            self.logger.info("[PREDICTOR] Initialized LightGBM predictor")
+
     def fit(self, X: np.ndarray, y: np.ndarray) -> "LGBMReturnPredictor":
-        print("[PREDICTOR] Fitting LightGBM predictor...")
-        print(f"[PREDICTOR] X shape: {X.shape}")
-        print(f"[PREDICTOR] y shape: {y.shape}")
+        if self.logger:
+            self.logger.info("[PREDICTOR] Fitting predictor on X=%s y=%s", X.shape, y.shape)
+
         self.model.fit(X, y)
-        print("[PREDICTOR] Predictor fitted successfully")
+
+        if self.logger:
+            self.logger.info("[PREDICTOR] Fit complete")
+
         return self
 
     def predict(self, X: np.ndarray) -> np.ndarray:
-        print(f"[PREDICTOR] Predicting for X shape: {X.shape}")
-        preds = self.model.predict(X)
-        print(f"[PREDICTOR] Prediction vector shape: {preds.shape}")
-        return preds
+        if self.logger:
+            self.logger.info("[PREDICTOR] Predicting on X=%s", X.shape)
+        return self.model.predict(X)

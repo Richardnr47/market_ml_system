@@ -1,11 +1,13 @@
 import pandas as pd
+import logging
 
 
 REQUIRED_COLUMNS = ["timestamp", "open", "high", "low", "close", "volume"]
 
 
-def validate_market_df(df: pd.DataFrame) -> None:
-    print("[VALIDATION] Validating input dataframe...")
+def validate_market_df(df: pd.DataFrame, logger: logging.Logger | None = None) -> None:
+    if logger:
+        logger.info("[VALIDATION] Validating input dataframe...")
 
     missing = [col for col in REQUIRED_COLUMNS if col not in df.columns]
     if missing:
@@ -20,4 +22,5 @@ def validate_market_df(df: pd.DataFrame) -> None:
     if (df["volume"] < 0).any():
         raise ValueError("Found negative volume")
 
-    print("[VALIDATION] Validation passed")
+    if logger:
+        logger.info("[VALIDATION] Validation passed")

@@ -2,15 +2,21 @@ experiment:
   name: "market_window_system"
 
 runtime:
+  mode: "debug"   # debug | production
+  log_dir: "logs"
+  log_file: "train.log"
   verbose: true
+  log_to_file: true
   show_shapes: true
   show_nan_counts: true
   show_feature_preview: true
   show_split_summary: true
   show_fold_metrics: true
+  show_fold_table: true
+  use_tqdm: true
 
 dataset:
-  input_file: "data/raw/market_data.csv"
+  input_file: "data/raw/market_data_15m_raw.csv"
   timestamp_col: "timestamp"
   price_col: "close"
   target_horizon: 5

@@ -1,0 +1,10 @@
+tickers = ["AAPL","MSFT","NVDA","GOOG","AMZN","META","TSLA","AVGO","ORCL","ADBE",
+"AMD","INTC","QCOM","TXN","AMAT","LRCX","KLAC","MU","NXPI","MPWR",
+"CRM","NOW","SNOW","PLTR","DDOG","MDB","ZS","OKTA","NET","TEAM",
+"JPM","BAC","GS","MS","C","AXP","BLK","SCHW","SPGI","ICE",
+"WMT","COST","HD","LOW","MCD","SBUX","NKE","TGT","DG",
+"JNJ","PFE","MRK","ABBV","UNH","LLY","TMO","DHR","BMY","AMGN",
+"CAT","DE","HON","GE","BA","LMT","RTX","UPS","FDX","ETN",
+"XOM","CVX","COP","SLB","EOG","PSX","VLO","MPC","OXY","HAL",
+"NFLX","DIS","CMCSA","VZ","T","TMUS","SPOT","ROKU","WBD",
+"SPY","QQQ","IWM","DIA","XLK","XLF","XLE","XLV","XLI","XLY"]

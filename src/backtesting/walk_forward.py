@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import logging
 
 
 @dataclass
@@ -14,12 +15,10 @@ def generate_walk_forward_splits(
     train_min_size: int,
     test_size: int,
     n_splits: int,
+    logger: logging.Logger | None = None,
 ) -> list[WalkForwardSplit]:
-    print("[SPLIT] Generating walk-forward splits...")
-    print(f"[SPLIT] n_samples={n_samples}")
-    print(f"[SPLIT] train_min_size={train_min_size}")
-    print(f"[SPLIT] test_size={test_size}")
-    print(f"[SPLIT] requested n_splits={n_splits}")
+    if logger:
+        logger.info("[SPLIT] Generating walk-forward splits...")
 
     splits: list[WalkForwardSplit] = []
     train_end = train_min_size
@@ -29,7 +28,13 @@ def generate_walk_forward_splits(
         test_end = test_start + test_size
 
         if test_end > n_samples:
-            print(f"[SPLIT] Stopping at split {split_idx}: test_end={test_end} > n_samples={n_samples}")
+            if logger:
+                logger.warning(
+                    "[SPLIT] Stopping at split %s because test_end=%s exceeds n_samples=%s",
+                    split_idx,
+                    test_end,
+                    n_samples,
+                )
             break
 
         split = WalkForwardSplit(
@@ -40,13 +45,19 @@ def generate_walk_forward_splits(
         )
         splits.append(split)
 
-        print(
-            f"[SPLIT] Fold {split_idx}: "
-            f"train=[{split.train_start}:{split.train_end}] "
-            f"test=[{split.test_start}:{split.test_end}]"
-        )
+        if logger:
+            logger.info(
+                "[SPLIT] Fold %s train=[%s:%s] test=[%s:%s]",
+                split_idx,
+                split.train_start,
+                split.train_end,
+                split.test_start,
+                split.test_end,
+            )
 
         train_end = test_end
 
-    print(f"[SPLIT] Total generated folds: {len(splits)}")
+    if logger:
+        logger.info("[SPLIT] Total generated folds: %s", len(splits))
+
     return splits

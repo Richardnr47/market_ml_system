@@ -1,0 +1,204 @@
+2026-03-24 17:23:45 | INFO | train_pipeline | ================================================================================
+2026-03-24 17:23:45 | INFO | train_pipeline | TRAIN PIPELINE START
+2026-03-24 17:23:45 | INFO | train_pipeline | ================================================================================
+2026-03-24 17:23:45 | INFO | train_pipeline | [DATA] START: Loading raw dataset
+2026-03-24 17:23:45 | INFO | train_pipeline | [DATA] Loaded rows=101920, cols=7
+2026-03-24 17:23:45 | DEBUG | train_pipeline | [DATA] Columns: ['ticker', 'timestamp', 'open', 'high', 'low', 'close', 'volume']
+2026-03-24 17:23:45 | INFO | train_pipeline | [DATA] DONE: Loading raw dataset (0.07s)
+2026-03-24 17:23:45 | INFO | train_pipeline | [VALIDATION] START: Validating raw dataset
+2026-03-24 17:23:45 | INFO | train_pipeline | [VALIDATION] Validating input dataframe...
+2026-03-24 17:23:45 | INFO | train_pipeline | [VALIDATION] Validation passed
+2026-03-24 17:23:45 | INFO | train_pipeline | [VALIDATION] DONE: Validating raw dataset (0.00s)
+2026-03-24 17:23:45 | INFO | train_pipeline | [DATA] START: Parsing and sorting timestamps
+2026-03-24 17:23:45 | INFO | train_pipeline | [DATA] Timestamp range: 2026-01-26 14:30:00+00:00 -> 2026-03-23 19:45:00+00:00
+2026-03-24 17:23:45 | INFO | train_pipeline | [DATA] DONE: Parsing and sorting timestamps (0.08s)
+2026-03-24 17:23:45 | INFO | train_pipeline | [FEATURES] START: Building market features
+2026-03-24 17:23:45 | INFO | train_pipeline | [FEATURES] Starting feature engineering...
+2026-03-24 17:23:45 | INFO | train_pipeline | [FEATURES] Feature engineering complete
+2026-03-24 17:23:45 | INFO | train_pipeline | [FEATURES] DONE: Building market features (0.03s)
+2026-03-24 17:23:45 | INFO | train_pipeline | [TARGET] START: Building training targets
+2026-03-24 17:23:45 | INFO | train_pipeline | [TARGET] Building forward return target with horizon=5
+2026-03-24 17:23:45 | INFO | train_pipeline | [TARGET] Target columns created
+2026-03-24 17:23:45 | INFO | train_pipeline | [TARGET] DONE: Building training targets (0.01s)
+2026-03-24 17:23:45 | INFO | train_pipeline | [FEATURES] Selected feature columns: 14
+2026-03-24 17:23:45 | INFO | train_pipeline | [FEATURES] Feature preview: ['ret_1', 'ret_2', 'ret_5', 'rv_5', 'rv_10', 'rv_20', 'mom_5', 'mom_10', 'mom_20', 'vol_z_5']
+2026-03-24 17:23:45 | INFO | train_pipeline | [FEATURES] NaN count in features+target block: 106
+2026-03-24 17:23:45 | INFO | train_pipeline | [WINDOWS] START: Creating rolling windows
+2026-03-24 17:23:45 | INFO | train_pipeline | [WINDOWS] Starting rolling window creation...
+2026-03-24 17:23:45 | INFO | train_pipeline | [WINDOWS] Input rows: 101920
+2026-03-24 17:23:45 | INFO | train_pipeline | [WINDOWS] Number of feature columns: 14
+2026-03-24 17:23:45 | INFO | train_pipeline | [WINDOWS] window_size=20 stride=1
+2026-03-24 17:23:46 | INFO | train_pipeline | [WINDOWS] X shape: (101875, 20, 14)
+2026-03-24 17:23:46 | INFO | train_pipeline | [WINDOWS] y shape: (101875,)
+2026-03-24 17:23:46 | INFO | train_pipeline | [WINDOWS] timestamps shape: (101875,)
+2026-03-24 17:23:46 | INFO | train_pipeline | [WINDOWS] DONE: Creating rolling windows (0.43s)
+2026-03-24 17:23:46 | INFO | train_pipeline | [WINDOWS] START: Flattening rolling windows
+2026-03-24 17:23:46 | INFO | train_pipeline | [WINDOWS] Flattened shape: (101875, 280)
+2026-03-24 17:23:46 | INFO | train_pipeline | [WINDOWS] Flat X shape: (101875, 280)
+2026-03-24 17:23:46 | INFO | train_pipeline | [WINDOWS] y shape: (101875,)
+2026-03-24 17:23:46 | INFO | train_pipeline | [WINDOWS] timestamps shape: (101875,)
+2026-03-24 17:23:46 | INFO | train_pipeline | [WINDOWS] DONE: Flattening rolling windows (0.06s)
+2026-03-24 17:23:46 | INFO | train_pipeline | [SPLIT] START: Generating walk-forward validation splits
+2026-03-24 17:23:46 | INFO | train_pipeline | [SPLIT] Generating walk-forward splits...
+2026-03-24 17:23:46 | INFO | train_pipeline | [SPLIT] Fold 0 train=[0:500] test=[500:620]
+2026-03-24 17:23:46 | INFO | train_pipeline | [SPLIT] Fold 1 train=[0:620] test=[620:740]
+2026-03-24 17:23:46 | INFO | train_pipeline | [SPLIT] Fold 2 train=[0:740] test=[740:860]
+2026-03-24 17:23:46 | INFO | train_pipeline | [SPLIT] Fold 3 train=[0:860] test=[860:980]
+2026-03-24 17:23:46 | INFO | train_pipeline | [SPLIT] Fold 4 train=[0:980] test=[980:1100]
+2026-03-24 17:23:46 | INFO | train_pipeline | [SPLIT] Total generated folds: 5
+2026-03-24 17:23:46 | INFO | train_pipeline | [SPLIT] DONE: Generating walk-forward validation splits (0.00s)
+2026-03-24 17:23:46 | INFO | train_pipeline | [SPLIT] Generated 5 splits
+2026-03-24 17:23:46 | INFO | train_pipeline | [MLFLOW] Experiment set to: market_window_system
+2026-03-24 17:23:47 | INFO | train_pipeline | [MLFLOW] Started MLflow run
+2026-03-24 17:23:47 | INFO | train_pipeline | --------------------------------------------------------------------------------
+2026-03-24 17:23:47 | INFO | train_pipeline | [FOLD] Starting fold 0
+2026-03-24 17:23:47 | INFO | train_pipeline | [FOLD] Train shape: X=(500, 280), y=(500,)
+2026-03-24 17:23:47 | INFO | train_pipeline | [FOLD] Test shape: X=(120, 280), y=(120,)
+2026-03-24 17:23:47 | INFO | train_pipeline | [STATE] START: Fold 0 fit state model
+2026-03-24 17:23:47 | INFO | train_pipeline | [STATE] Fitting GMM state model on X=(500, 280)
+2026-03-24 17:23:50 | INFO | train_pipeline | [STATE] GMM fitted successfully
+2026-03-24 17:23:50 | INFO | train_pipeline | [STATE] DONE: Fold 0 fit state model (3.80s)
+2026-03-24 17:23:50 | INFO | train_pipeline | [STATE] START: Fold 0 transform train/test with state model
+2026-03-24 17:23:50 | INFO | train_pipeline | [STATE] X_train_meta shape: (500, 286)
+2026-03-24 17:23:50 | INFO | train_pipeline | [STATE] X_test_meta shape: (120, 286)
+2026-03-24 17:23:50 | INFO | train_pipeline | [STATE] DONE: Fold 0 transform train/test with state model (0.02s)
+2026-03-24 17:23:50 | INFO | train_pipeline | [PREDICTOR] START: Fold 0 fit predictor
+2026-03-24 17:23:50 | INFO | train_pipeline | [PREDICTOR] Initialized LightGBM predictor
+2026-03-24 17:23:50 | INFO | train_pipeline | [PREDICTOR] Fitting predictor on X=(500, 286) y=(500,)
+2026-03-24 17:23:51 | INFO | train_pipeline | [PREDICTOR] Fit complete
+2026-03-24 17:23:51 | INFO | train_pipeline | [PREDICTOR] DONE: Fold 0 fit predictor (0.26s)
+2026-03-24 17:23:51 | INFO | train_pipeline | [PREDICTOR] START: Fold 0 predict on test
+2026-03-24 17:23:51 | INFO | train_pipeline | [PREDICTOR] Predicting on X=(120, 286)
+2026-03-24 17:23:51 | INFO | train_pipeline | [PREDICTOR] DONE: Fold 0 predict on test (0.00s)
+2026-03-24 17:23:51 | INFO | train_pipeline | [EVAL] START: Fold 0 evaluate predictions
+2026-03-24 17:23:51 | INFO | train_pipeline | [EVAL] Metrics: {'mae': 2.5152874265384124, 'r2': -0.19383597609669168}
+2026-03-24 17:23:51 | INFO | train_pipeline | [EVAL] DONE: Fold 0 evaluate predictions (0.00s)
+2026-03-24 17:23:51 | INFO | train_pipeline | [FOLD] Fold 0 metrics: {'mae': 2.5152874265384124, 'r2': -0.19383597609669168, 'fold': 0, 'train_size': 500, 'test_size': 120}
+2026-03-24 17:23:51 | INFO | train_pipeline | --------------------------------------------------------------------------------
+2026-03-24 17:23:51 | INFO | train_pipeline | [FOLD] Starting fold 1
+2026-03-24 17:23:51 | INFO | train_pipeline | [FOLD] Train shape: X=(620, 280), y=(620,)
+2026-03-24 17:23:51 | INFO | train_pipeline | [FOLD] Test shape: X=(120, 280), y=(120,)
+2026-03-24 17:23:51 | INFO | train_pipeline | [STATE] START: Fold 1 fit state model
+2026-03-24 17:23:51 | INFO | train_pipeline | [STATE] Fitting GMM state model on X=(620, 280)
+2026-03-24 17:23:51 | INFO | train_pipeline | [STATE] GMM fitted successfully
+2026-03-24 17:23:51 | INFO | train_pipeline | [STATE] DONE: Fold 1 fit state model (0.09s)
+2026-03-24 17:23:51 | INFO | train_pipeline | [STATE] START: Fold 1 transform train/test with state model
+2026-03-24 17:23:51 | INFO | train_pipeline | [STATE] X_train_meta shape: (620, 286)
+2026-03-24 17:23:51 | INFO | train_pipeline | [STATE] X_test_meta shape: (120, 286)
+2026-03-24 17:23:51 | INFO | train_pipeline | [STATE] DONE: Fold 1 transform train/test with state model (0.02s)
+2026-03-24 17:23:51 | INFO | train_pipeline | [PREDICTOR] START: Fold 1 fit predictor
+2026-03-24 17:23:51 | INFO | train_pipeline | [PREDICTOR] Initialized LightGBM predictor
+2026-03-24 17:23:51 | INFO | train_pipeline | [PREDICTOR] Fitting predictor on X=(620, 286) y=(620,)
+2026-03-24 17:23:51 | INFO | train_pipeline | [PREDICTOR] Fit complete
+2026-03-24 17:23:51 | INFO | train_pipeline | [PREDICTOR] DONE: Fold 1 fit predictor (0.31s)
+2026-03-24 17:23:51 | INFO | train_pipeline | [PREDICTOR] START: Fold 1 predict on test
+2026-03-24 17:23:51 | INFO | train_pipeline | [PREDICTOR] Predicting on X=(120, 286)
+2026-03-24 17:23:51 | INFO | train_pipeline | [PREDICTOR] DONE: Fold 1 predict on test (0.00s)
+2026-03-24 17:23:51 | INFO | train_pipeline | [EVAL] START: Fold 1 evaluate predictions
+2026-03-24 17:23:51 | INFO | train_pipeline | [EVAL] Metrics: {'mae': 2.5738201906224956, 'r2': -0.100998737862946}
+2026-03-24 17:23:51 | INFO | train_pipeline | [EVAL] DONE: Fold 1 evaluate predictions (0.00s)
+2026-03-24 17:23:51 | INFO | train_pipeline | [FOLD] Fold 1 metrics: {'mae': 2.5738201906224956, 'r2': -0.100998737862946, 'fold': 1, 'train_size': 620, 'test_size': 120}
+2026-03-24 17:23:51 | INFO | train_pipeline | --------------------------------------------------------------------------------
+2026-03-24 17:23:51 | INFO | train_pipeline | [FOLD] Starting fold 2
+2026-03-24 17:23:51 | INFO | train_pipeline | [FOLD] Train shape: X=(740, 280), y=(740,)
+2026-03-24 17:23:51 | INFO | train_pipeline | [FOLD] Test shape: X=(120, 280), y=(120,)
+2026-03-24 17:23:51 | INFO | train_pipeline | [STATE] START: Fold 2 fit state model
+2026-03-24 17:23:51 | INFO | train_pipeline | [STATE] Fitting GMM state model on X=(740, 280)
+2026-03-24 17:23:51 | INFO | train_pipeline | [STATE] GMM fitted successfully
+2026-03-24 17:23:51 | INFO | train_pipeline | [STATE] DONE: Fold 2 fit state model (0.09s)
+2026-03-24 17:23:51 | INFO | train_pipeline | [STATE] START: Fold 2 transform train/test with state model
+2026-03-24 17:23:51 | INFO | train_pipeline | [STATE] X_train_meta shape: (740, 286)
+2026-03-24 17:23:51 | INFO | train_pipeline | [STATE] X_test_meta shape: (120, 286)
+2026-03-24 17:23:51 | INFO | train_pipeline | [STATE] DONE: Fold 2 transform train/test with state model (0.02s)
+2026-03-24 17:23:51 | INFO | train_pipeline | [PREDICTOR] START: Fold 2 fit predictor
+2026-03-24 17:23:51 | INFO | train_pipeline | [PREDICTOR] Initialized LightGBM predictor
+2026-03-24 17:23:51 | INFO | train_pipeline | [PREDICTOR] Fitting predictor on X=(740, 286) y=(740,)
+2026-03-24 17:23:52 | INFO | train_pipeline | [PREDICTOR] Fit complete
+2026-03-24 17:23:52 | INFO | train_pipeline | [PREDICTOR] DONE: Fold 2 fit predictor (0.36s)
+2026-03-24 17:23:52 | INFO | train_pipeline | [PREDICTOR] START: Fold 2 predict on test
+2026-03-24 17:23:52 | INFO | train_pipeline | [PREDICTOR] Predicting on X=(120, 286)
+2026-03-24 17:23:52 | INFO | train_pipeline | [PREDICTOR] DONE: Fold 2 predict on test (0.00s)
+2026-03-24 17:23:52 | INFO | train_pipeline | [EVAL] START: Fold 2 evaluate predictions
+2026-03-24 17:23:52 | INFO | train_pipeline | [EVAL] Metrics: {'mae': 2.2669173183429807, 'r2': -0.30762531178929975}
+2026-03-24 17:23:52 | INFO | train_pipeline | [EVAL] DONE: Fold 2 evaluate predictions (0.00s)
+2026-03-24 17:23:52 | INFO | train_pipeline | [FOLD] Fold 2 metrics: {'mae': 2.2669173183429807, 'r2': -0.30762531178929975, 'fold': 2, 'train_size': 740, 'test_size': 120}
+2026-03-24 17:23:52 | INFO | train_pipeline | --------------------------------------------------------------------------------
+2026-03-24 17:23:52 | INFO | train_pipeline | [FOLD] Starting fold 3
+2026-03-24 17:23:52 | INFO | train_pipeline | [FOLD] Train shape: X=(860, 280), y=(860,)
+2026-03-24 17:23:52 | INFO | train_pipeline | [FOLD] Test shape: X=(120, 280), y=(120,)
+2026-03-24 17:23:52 | INFO | train_pipeline | [STATE] START: Fold 3 fit state model
+2026-03-24 17:23:52 | INFO | train_pipeline | [STATE] Fitting GMM state model on X=(860, 280)
+2026-03-24 17:23:52 | INFO | train_pipeline | [STATE] GMM fitted successfully
+2026-03-24 17:23:52 | INFO | train_pipeline | [STATE] DONE: Fold 3 fit state model (0.11s)
+2026-03-24 17:23:52 | INFO | train_pipeline | [STATE] START: Fold 3 transform train/test with state model
+2026-03-24 17:23:52 | INFO | train_pipeline | [STATE] X_train_meta shape: (860, 286)
+2026-03-24 17:23:52 | INFO | train_pipeline | [STATE] X_test_meta shape: (120, 286)
+2026-03-24 17:23:52 | INFO | train_pipeline | [STATE] DONE: Fold 3 transform train/test with state model (0.02s)
+2026-03-24 17:23:52 | INFO | train_pipeline | [PREDICTOR] START: Fold 3 fit predictor
+2026-03-24 17:23:52 | INFO | train_pipeline | [PREDICTOR] Initialized LightGBM predictor
+2026-03-24 17:23:52 | INFO | train_pipeline | [PREDICTOR] Fitting predictor on X=(860, 286) y=(860,)
+2026-03-24 17:23:52 | INFO | train_pipeline | [PREDICTOR] Fit complete
+2026-03-24 17:23:52 | INFO | train_pipeline | [PREDICTOR] DONE: Fold 3 fit predictor (0.40s)
+2026-03-24 17:23:52 | INFO | train_pipeline | [PREDICTOR] START: Fold 3 predict on test
+2026-03-24 17:23:52 | INFO | train_pipeline | [PREDICTOR] Predicting on X=(120, 286)
+2026-03-24 17:23:52 | INFO | train_pipeline | [PREDICTOR] DONE: Fold 3 predict on test (0.00s)
+2026-03-24 17:23:52 | INFO | train_pipeline | [EVAL] START: Fold 3 evaluate predictions
+2026-03-24 17:23:52 | INFO | train_pipeline | [EVAL] Metrics: {'mae': 2.9207904099954645, 'r2': -0.06469074535651176}
+2026-03-24 17:23:52 | INFO | train_pipeline | [EVAL] DONE: Fold 3 evaluate predictions (0.00s)
+2026-03-24 17:23:52 | INFO | train_pipeline | [FOLD] Fold 3 metrics: {'mae': 2.9207904099954645, 'r2': -0.06469074535651176, 'fold': 3, 'train_size': 860, 'test_size': 120}
+2026-03-24 17:23:52 | INFO | train_pipeline | --------------------------------------------------------------------------------
+2026-03-24 17:23:52 | INFO | train_pipeline | [FOLD] Starting fold 4
+2026-03-24 17:23:52 | INFO | train_pipeline | [FOLD] Train shape: X=(980, 280), y=(980,)
+2026-03-24 17:23:52 | INFO | train_pipeline | [FOLD] Test shape: X=(120, 280), y=(120,)
+2026-03-24 17:23:52 | INFO | train_pipeline | [STATE] START: Fold 4 fit state model
+2026-03-24 17:23:52 | INFO | train_pipeline | [STATE] Fitting GMM state model on X=(980, 280)
+2026-03-24 17:23:52 | INFO | train_pipeline | [STATE] GMM fitted successfully
+2026-03-24 17:23:52 | INFO | train_pipeline | [STATE] DONE: Fold 4 fit state model (0.11s)
+2026-03-24 17:23:52 | INFO | train_pipeline | [STATE] START: Fold 4 transform train/test with state model
+2026-03-24 17:23:52 | INFO | train_pipeline | [STATE] X_train_meta shape: (980, 286)
+2026-03-24 17:23:52 | INFO | train_pipeline | [STATE] X_test_meta shape: (120, 286)
+2026-03-24 17:23:52 | INFO | train_pipeline | [STATE] DONE: Fold 4 transform train/test with state model (0.03s)
+2026-03-24 17:23:52 | INFO | train_pipeline | [PREDICTOR] START: Fold 4 fit predictor
+2026-03-24 17:23:52 | INFO | train_pipeline | [PREDICTOR] Initialized LightGBM predictor
+2026-03-24 17:23:52 | INFO | train_pipeline | [PREDICTOR] Fitting predictor on X=(980, 286) y=(980,)
+2026-03-24 17:23:53 | INFO | train_pipeline | [PREDICTOR] Fit complete
+2026-03-24 17:23:53 | INFO | train_pipeline | [PREDICTOR] DONE: Fold 4 fit predictor (0.44s)
+2026-03-24 17:23:53 | INFO | train_pipeline | [PREDICTOR] START: Fold 4 predict on test
+2026-03-24 17:23:53 | INFO | train_pipeline | [PREDICTOR] Predicting on X=(120, 286)
+2026-03-24 17:23:53 | INFO | train_pipeline | [PREDICTOR] DONE: Fold 4 predict on test (0.00s)
+2026-03-24 17:23:53 | INFO | train_pipeline | [EVAL] START: Fold 4 evaluate predictions
+2026-03-24 17:23:53 | INFO | train_pipeline | [EVAL] Metrics: {'mae': 2.3929613992279917, 'r2': -0.3825100955064984}
+2026-03-24 17:23:53 | INFO | train_pipeline | [EVAL] DONE: Fold 4 evaluate predictions (0.00s)
+2026-03-24 17:23:53 | INFO | train_pipeline | [FOLD] Fold 4 metrics: {'mae': 2.3929613992279917, 'r2': -0.3825100955064984, 'fold': 4, 'train_size': 980, 'test_size': 120}
+2026-03-24 17:23:53 | INFO | train_pipeline | [SUMMARY] START: Aggregating fold metrics
+2026-03-24 17:23:53 | INFO | train_pipeline | [SUMMARY] avg_mae=2.533955
+2026-03-24 17:23:53 | INFO | train_pipeline | [SUMMARY] avg_r2=-0.209932
+2026-03-24 17:23:53 | INFO | train_pipeline | [SUMMARY] n_folds=5
+2026-03-24 17:23:53 | INFO | train_pipeline | [SUMMARY] DONE: Aggregating fold metrics (0.01s)
+2026-03-24 17:23:53 | INFO | train_pipeline | [REPORT] Fold metrics summary:
+2026-03-24 17:23:53 | INFO | train_pipeline | 
+     mae        r2  fold  train_size  test_size
+2.515287 -0.193836     0         500        120
+2.573820 -0.100999     1         620        120
+2.266917 -0.307625     2         740        120
+2.920790 -0.064691     3         860        120
+2.392961 -0.382510     4         980        120
+2026-03-24 17:23:53 | INFO | train_pipeline | [REPORT] Aggregate summary:
+2026-03-24 17:23:53 | INFO | train_pipeline | 
+           mae        r2  train_size  test_size
+mean  2.533955 -0.209932   740.00000      120.0
+std   0.246357  0.134673   189.73666        0.0
+min   2.266917 -0.382510   500.00000      120.0
+max   2.920790 -0.064691   980.00000      120.0
+2026-03-24 17:23:53 | INFO | train_pipeline | [ARTIFACT] START: Saving artifacts
+2026-03-24 17:23:53 | INFO | train_pipeline | [ARTIFACT] Saving joblib artifact to models\snapshots\latest\state_model.joblib
+2026-03-24 17:23:53 | INFO | train_pipeline | [ARTIFACT] Saving joblib artifact to models\snapshots\latest\predictor.joblib
+2026-03-24 17:23:53 | INFO | train_pipeline | [ARTIFACT] Saving joblib artifact to models\snapshots\latest\feature_cols.joblib
+2026-03-24 17:23:53 | INFO | train_pipeline | [ARTIFACT] Saving JSON artifact to models\snapshots\latest\summary.json
+2026-03-24 17:23:53 | INFO | train_pipeline | [ARTIFACT] Saving JSON artifact to models\snapshots\latest\config_snapshot.json
+2026-03-24 17:23:53 | INFO | train_pipeline | [ARTIFACT] DONE: Saving artifacts (0.03s)
+2026-03-24 17:23:53 | INFO | train_pipeline | [MLFLOW] MLflow run complete
+2026-03-24 17:23:53 | INFO | train_pipeline | ================================================================================
+2026-03-24 17:23:53 | INFO | train_pipeline | TRAIN PIPELINE FINISHED
+2026-03-24 17:23:53 | INFO | train_pipeline | ================================================================================
+2026-03-24 17:23:53 | INFO | train_pipeline | [RESULT] {'avg_mae': 2.5339553489454687, 'avg_r2': -0.2099321733223895, 'n_folds': 5, 'feature_cols': ['ret_1', 'ret_2', 'ret_5', 'rv_5', 'rv_10', 'rv_20', 'mom_5', 'mom_10', 'mom_20', 'vol_z_5', 'vol_z_20', 'hl_range', 'oc_change', 'body_to_range']}

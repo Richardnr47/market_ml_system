@@ -1,0 +1,21 @@
+{
+  "avg_mae": 2.5339553489454687,
+  "avg_r2": -0.2099321733223895,
+  "n_folds": 5,
+  "feature_cols": [
+    "ret_1",
+    "ret_2",
+    "ret_5",
+    "rv_5",
+    "rv_10",
+    "rv_20",
+    "mom_5",
+    "mom_10",
+    "mom_20",
+    "vol_z_5",
+    "vol_z_20",
+    "hl_range",
+    "oc_change",
+    "body_to_range"
+  ]
+}
