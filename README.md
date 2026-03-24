@@ -1,0 +1,1 @@
+Production-minded market ML system for window-based state learning, walk-forward evaluation, artifact management, and API serving.

@@ -1,0 +1,26 @@
+Metadata-Version: 2.4
+Name: market-ml-system
+Version: 0.1.0
+Summary: Elite ML systems repo for market state learning, prediction, backtesting, and serving
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: numpy>=1.26
+Requires-Dist: pandas>=2.2
+Requires-Dist: scikit-learn>=1.5
+Requires-Dist: lightgbm>=4.5
+Requires-Dist: pyyaml>=6.0.2
+Requires-Dist: joblib>=1.4
+Requires-Dist: pydantic>=2.8
+Requires-Dist: pydantic-settings>=2.4
+Requires-Dist: fastapi>=0.115
+Requires-Dist: uvicorn>=0.30
+Requires-Dist: mlflow>=2.16
+Requires-Dist: python-dotenv>=1.0
+Requires-Dist: pyarrow>=17.0
+Provides-Extra: dev
+Requires-Dist: pytest>=8.3; extra == "dev"
+Requires-Dist: ruff>=0.6; extra == "dev"
+Requires-Dist: mypy>=1.11; extra == "dev"
+Requires-Dist: httpx>=0.27; extra == "dev"
+
+Production-minded market ML system for window-based state learning, walk-forward evaluation, artifact management, and API serving.
