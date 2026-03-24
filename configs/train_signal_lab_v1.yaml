@@ -1,10 +1,10 @@
 experiment:
-  name: "market_window_champion_price_only_tech_v1_topk1_h5"
+  name: "market_window_signal_lab_v1"
 
 runtime:
   mode: "debug"
   log_dir: "logs"
-  log_file: "train_champion_default.log"
+  log_file: "train_signal_lab_v1.log"
   verbose: true
   log_to_file: true
   show_shapes: true
@@ -32,6 +32,7 @@ features:
     flow_proxies: false
     effort_result: false
     technical_indicators: true
+    signal_lab_v1: true
 
   return_lags: [1, 2, 5]
   vol_windows: [5, 10, 20]
@@ -78,6 +79,6 @@ trading:
   recommendations_top_k: 10
 
 artifacts:
-  output_dir: "models/snapshots/champion_default"
-  fold_predictions_dir: "data/processed/fold_predictions_champion_default"
+  output_dir: "models/snapshots/signal_lab_v1"
+  fold_predictions_dir: "data/processed/fold_predictions_signal_lab_v1"
   fold_predictions_format: "parquet"

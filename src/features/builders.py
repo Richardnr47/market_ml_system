@@ -137,6 +137,59 @@ def build_market_features(
         out["ema_fast_slope_3"] = grouped["ema_fast_12"].transform(lambda s: s.diff(3))
 
     # --------------------------------
+    # Signal lab v1 (candidate alpha pack)
+    # --------------------------------
+    if feature_flags.get("signal_lab_v1", False):
+        # Mean-reversion proxy via Bollinger-style z-score.
+        close_ma_20 = grouped["close"].transform(lambda s: s.rolling(20).mean())
+        close_std_20 = grouped["close"].transform(lambda s: s.rolling(20).std())
+        out["bb_z_20"] = (out["close"] - close_ma_20) / close_std_20.replace(0, np.nan)
+
+        # RSI(14) momentum oscillator.
+        out["_delta_close"] = grouped["close"].diff()
+        out["_up_move"] = out["_delta_close"].clip(lower=0)
+        out["_down_move"] = (-out["_delta_close"]).clip(lower=0)
+        avg_up_14 = grouped["_up_move"].transform(lambda s: s.rolling(14).mean())
+        avg_down_14 = grouped["_down_move"].transform(lambda s: s.rolling(14).mean())
+        rs_14 = avg_up_14 / avg_down_14.replace(0, np.nan)
+        out["rsi_14"] = 100.0 - (100.0 / (1.0 + rs_14))
+
+        # Stochastic %K(14) for range position.
+        low_14 = grouped["low"].transform(lambda s: s.rolling(14).min())
+        high_14 = grouped["high"].transform(lambda s: s.rolling(14).max())
+        out["stoch_k_14"] = (out["close"] - low_14) / (high_14 - low_14).replace(0, np.nan)
+
+        # Breakout / breakdown distance from rolling extremes.
+        roll_high_20 = grouped["high"].transform(lambda s: s.rolling(20).max())
+        roll_low_20 = grouped["low"].transform(lambda s: s.rolling(20).min())
+        out["breakout_up_20"] = out["close"] / roll_high_20.replace(0, np.nan) - 1.0
+        out["breakout_down_20"] = out["close"] / roll_low_20.replace(0, np.nan) - 1.0
+
+        # Volatility compression and trend-to-volatility ratio.
+        if "rv_5" not in out.columns:
+            out["rv_5"] = grouped["ret_1"].transform(lambda s: s.rolling(5).std())
+        if "rv_20" not in out.columns:
+            out["rv_20"] = grouped["ret_1"].transform(lambda s: s.rolling(20).std())
+        out["rv_ratio_5_20"] = out["rv_5"] / out["rv_20"].replace(0, np.nan)
+
+        if "ema_spread_12_26" in out.columns and "natr_14" in out.columns:
+            out["trend_to_vol_ema"] = out["ema_spread_12_26"] / out["natr_14"].replace(0, np.nan)
+
+        # Cross-sectional relative-strength ranks per timestamp.
+        by_ts = out.groupby(timestamp_col, group_keys=False)
+        if "ret_1" in out.columns:
+            out["cs_rank_ret_1"] = by_ts["ret_1"].rank(pct=True)
+        if "mom_5" in out.columns:
+            out["cs_rank_mom_5"] = by_ts["mom_5"].rank(pct=True)
+        if "natr_14" in out.columns:
+            out["cs_rank_natr_14"] = by_ts["natr_14"].rank(pct=True)
+        if "vwap_dist_10" in out.columns:
+            out["cs_rank_vwap_dist_10"] = by_ts["vwap_dist_10"].rank(pct=True)
+        out["cs_rank_volume"] = by_ts["volume"].rank(pct=True)
+
+        out = out.drop(columns=["_delta_close", "_up_move", "_down_move"], errors="ignore")
+
+    # --------------------------------
     # Effort vs result
     # --------------------------------
     if feature_flags.get("effort_result", True):

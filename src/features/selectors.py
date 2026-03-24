@@ -78,6 +78,21 @@ def select_feature_columns(df_columns, feature_flags: dict) -> list[str]:
             ]
         )
 
+    if feature_flags.get("signal_lab_v1", False):
+        selected.extend(
+            [
+                c
+                for c in df_columns
+                if c.startswith("bb_z_")
+                or c.startswith("rsi_")
+                or c.startswith("stoch_")
+                or c.startswith("breakout_")
+                or c.startswith("rv_ratio_")
+                or c.startswith("trend_to_vol_")
+                or c.startswith("cs_rank_")
+            ]
+        )
+
     # preserve order and uniqueness
     seen = set()
     ordered_unique = []
