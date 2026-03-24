@@ -13,6 +13,7 @@ class LGBMReturnPredictor:
         colsample_bytree: float,
         random_state: int,
     ) -> None:
+        print("[PREDICTOR] Initializing LightGBM predictor...")
         self.model = lgb.LGBMRegressor(
             objective="regression",
             learning_rate=learning_rate,
@@ -25,8 +26,15 @@ class LGBMReturnPredictor:
         )
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> "LGBMReturnPredictor":
+        print("[PREDICTOR] Fitting LightGBM predictor...")
+        print(f"[PREDICTOR] X shape: {X.shape}")
+        print(f"[PREDICTOR] y shape: {y.shape}")
         self.model.fit(X, y)
+        print("[PREDICTOR] Predictor fitted successfully")
         return self
 
     def predict(self, X: np.ndarray) -> np.ndarray:
-        return self.model.predict(X)
+        print(f"[PREDICTOR] Predicting for X shape: {X.shape}")
+        preds = self.model.predict(X)
+        print(f"[PREDICTOR] Prediction vector shape: {preds.shape}")
+        return preds

@@ -5,5 +5,8 @@ import yaml
 
 
 def load_yaml(path: str | Path) -> dict[str, Any]:
+    print(f"[CONFIG] Loading YAML: {path}")
     with open(path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+        data = yaml.safe_load(f)
+    print(f"[CONFIG] Loaded YAML successfully: {path}")
+    return data

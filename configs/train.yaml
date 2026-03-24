@@ -1,6 +1,14 @@
 experiment:
   name: "market_window_system"
 
+runtime:
+  verbose: true
+  show_shapes: true
+  show_nan_counts: true
+  show_feature_preview: true
+  show_split_summary: true
+  show_fold_metrics: true
+
 dataset:
   input_file: "data/raw/market_data.csv"
   timestamp_col: "timestamp"

@@ -1,6 +1,12 @@
 from src.pipelines.train_pipeline import run_train_pipeline
 
 
-if __name__ == "__main__":
+def main() -> None:
+    print("[SCRIPT] Running training entrypoint...")
     result = run_train_pipeline("configs/train.yaml")
-    print(result)
+    print("[SCRIPT] Training finished")
+    print(f"[SCRIPT] Final summary: {result}")
+
+
+if __name__ == "__main__":
+    main()
