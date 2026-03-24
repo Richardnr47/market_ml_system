@@ -59,6 +59,8 @@ def run_train_pipeline(config_path: str) -> dict:
                 vol_windows=cfg["features"]["vol_windows"],
                 momentum_windows=cfg["features"]["momentum_windows"],
                 volume_windows=cfg["features"]["volume_windows"],
+                ticker_col=cfg["dataset"].get("ticker_col", "ticker"),
+                timestamp_col=cfg["dataset"]["timestamp_col"],
                 logger=logger,
             )
 
@@ -67,8 +69,20 @@ def run_train_pipeline(config_path: str) -> dict:
                 df=df,
                 price_col=cfg["dataset"]["price_col"],
                 horizon=cfg["dataset"]["target_horizon"],
+                ticker_col=cfg["dataset"].get("ticker_col", "ticker"),
                 logger=logger,
             )
+
+        valid_target = df["target_forward_return"].dropna()
+        dbg.log("TARGET", f"Valid target count: {len(valid_target)}")
+
+        if len(valid_target) > 0:
+            dbg.log("TARGET", f"Target mean: {valid_target.mean():.6f}")
+            dbg.log("TARGET", f"Target std: {valid_target.std():.6f}")
+            dbg.log("TARGET", f"Target min: {valid_target.min():.6f}")
+            dbg.log("TARGET", f"Target max: {valid_target.max():.6f}")
+        else:
+            dbg.warning("TARGET", "No valid target values after target creation")
 
         feature_cols = [
             c for c in df.columns
@@ -93,10 +107,22 @@ def run_train_pipeline(config_path: str) -> dict:
                 feature_cols=feature_cols,
                 target_col="target_forward_return",
                 timestamp_col=timestamp_col,
+                ticker_col=cfg["dataset"].get("ticker_col", "ticker"),
                 window_size=cfg["windows"]["size"],
                 stride=cfg["windows"]["stride"],
                 logger=logger,
             )
+
+        ticker_window_counts = (
+            pd.Series(wb.tickers)
+            .value_counts()
+            .sort_values(ascending=False)
+        )
+
+        dbg.log(
+            "WINDOWS",
+            f"Top ticker window counts:\n{ticker_window_counts.head(10).to_string()}"
+        )
 
         with dbg.timer("WINDOWS", "Flattening rolling windows"):
             X = flatten_windows(wb.X, logger=logger)

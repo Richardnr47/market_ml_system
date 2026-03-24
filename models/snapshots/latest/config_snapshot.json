@@ -18,6 +18,7 @@
   },
   "dataset": {
     "input_file": "data/raw/market_data_15m_raw.csv",
+    "ticker_col": "ticker",
     "timestamp_col": "timestamp",
     "price_col": "close",
     "target_horizon": 5,
@@ -74,8 +75,8 @@
   "validation": {
     "method": "walk_forward",
     "n_splits": 5,
-    "train_min_size": 500,
-    "test_size": 120
+    "train_min_size": 20000,
+    "test_size": 5000
   },
   "artifacts": {
     "output_dir": "models/snapshots/latest"
