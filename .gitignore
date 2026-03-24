@@ -1,1 +1,55 @@
+# Bytecode & caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Logs & local run output
+logs/
+*.log
+
+# MLflow (local tracking)
+mlflow.db
+mlruns/
+
+# Trained artifacts (adjust if you want to version some small fixtures)
+models/snapshots/
+*.joblib
+*.pkl
+*.pickle
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Data (optional — uncomment or add paths you never want in git)
+# data/raw/
+# data/processed/
+
+# Large one-off export you already ignore
 data/raw/market_data_15m_raw.csv
