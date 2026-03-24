@@ -79,6 +79,8 @@
     "test_size": 5000
   },
   "artifacts": {
-    "output_dir": "models/snapshots/latest"
+    "output_dir": "models/snapshots/latest",
+    "fold_predictions_dir": "data/processed/fold_predictions",
+    "fold_predictions_format": "parquet"
   }
 }

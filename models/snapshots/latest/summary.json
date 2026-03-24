@@ -1,6 +1,11 @@
 {
-  "avg_mae": 0.00654165968396256,
-  "avg_r2": 0.018545617227385902,
+  "avg_mae": 0.006924531718802769,
+  "avg_r2": -0.015760226828926104,
+  "avg_directional_accuracy": 0.5504399999999999,
+  "avg_pearson_corr": 0.14462536001059867,
+  "avg_spearman_corr": 0.1415967953784244,
+  "avg_baseline_zero_mae": 0.006850044705082689,
+  "avg_baseline_mean_mae": 0.006854262645322485,
   "n_folds": 5,
   "feature_cols": [
     "ret_1",
@@ -16,6 +21,38 @@
     "vol_z_20",
     "hl_range",
     "oc_change",
-    "body_to_range"
+    "body_to_range",
+    "close_location",
+    "buy_pressure_proxy",
+    "sell_pressure_proxy",
+    "vol_ratio_5_20",
+    "vol_ratio_1_20",
+    "dollar_volume",
+    "dollar_vol_z_20",
+    "delta_proxy",
+    "signed_volume_proxy",
+    "cvd_proxy",
+    "cvd_proxy_change_5",
+    "cvd_proxy_slope_5",
+    "cvd_proxy_z_20",
+    "effort_result_ratio",
+    "volume_per_abs_ret",
+    "abs_ret_per_volume",
+    "range_per_volume",
+    "delta_proxy_mean_5",
+    "delta_proxy_mean_20",
+    "delta_proxy_std_20"
+  ],
+  "top_10_features": [
+    "rv_5_t-20",
+    "vol_ratio_5_20_t-20",
+    "ret_5_t-20",
+    "rv_10_t-20",
+    "vol_ratio_5_20_t-7",
+    "vol_ratio_5_20_t-8",
+    "rv_10_t-16",
+    "delta_proxy_std_20_t-1",
+    "vol_ratio_5_20_t-16",
+    "rv_10_t-19"
   ]
 }

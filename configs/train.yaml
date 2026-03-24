@@ -16,7 +16,7 @@ runtime:
   use_tqdm: true
 
 dataset:
-  input_file: "data/raw/market_data_15m_raw.csv"
+  input_file: "data/raw/market_data.csv"
   ticker_col: "ticker"
   timestamp_col: "timestamp"
   price_col: "close"
@@ -25,11 +25,13 @@ dataset:
 
 features:
   include:
-    - returns
-    - volatility
-    - momentum
-    - candle_structure
-    - volume_zscore
+    price_basic: true
+    candle_structure: true
+    volume_regime: true
+    dollar_volume: true
+    flow_proxies: true
+    effort_result: true
+
   return_lags: [1, 2, 5]
   vol_windows: [5, 10, 20]
   momentum_windows: [5, 10, 20]
@@ -40,6 +42,7 @@ windows:
   stride: 1
 
 state_model:
+  enabled: true
   type: "gmm"
   n_components: 5
   random_state: 42
@@ -63,3 +66,5 @@ validation:
 
 artifacts:
   output_dir: "models/snapshots/latest"
+  fold_predictions_dir: "data/processed/fold_predictions"
+  fold_predictions_format: "parquet"

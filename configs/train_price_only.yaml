@@ -1,0 +1,69 @@
+experiment:
+  name: "market_window_price_only"
+
+runtime:
+  mode: "debug"
+  log_dir: "logs"
+  log_file: "train_price_only.log"
+  verbose: true
+  log_to_file: true
+  show_shapes: true
+  show_nan_counts: true
+  show_feature_preview: true
+  show_split_summary: true
+  show_fold_metrics: true
+  show_fold_table: true
+  use_tqdm: true
+
+dataset:
+  input_file: "data/raw/market_data.csv"
+  ticker_col: "ticker"
+  timestamp_col: "timestamp"
+  price_col: "close"
+  target_horizon: 5
+  target_type: "forward_return"
+
+features:
+  include:
+    price_basic: true
+    candle_structure: true
+    volume_regime: false
+    dollar_volume: false
+    flow_proxies: false
+    effort_result: false
+  return_lags: [1, 2, 5]
+  vol_windows: [5, 10, 20]
+  momentum_windows: [5, 10, 20]
+  volume_windows: [5, 20]
+
+windows:
+  size: 20
+  stride: 1
+
+state_model:
+  enabled: false
+  type: "gmm"
+  n_components: 5
+  random_state: 42
+
+predictor:
+  type: "lightgbm"
+  objective: "regression"
+  learning_rate: 0.03
+  n_estimators: 500
+  num_leaves: 31
+  max_depth: 6
+  subsample: 0.8
+  colsample_bytree: 0.8
+  random_state: 42
+
+validation:
+  method: "walk_forward"
+  n_splits: 5
+  train_min_size: 20000
+  test_size: 5000
+
+artifacts:
+  output_dir: "models/snapshots/price_only"
+  fold_predictions_dir: "data/processed/fold_predictions_price_only"
+  fold_predictions_format: "parquet"

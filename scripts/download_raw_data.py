@@ -74,4 +74,4 @@ df = download_many_tickers(
 
 DATA_RAW_DIR = PROJECT_ROOT / "data" / "raw"
 
-df.to_csv(f"{DATA_RAW_DIR}/market_data_15m_raw.csv", index=False)
+df.to_csv(f"{DATA_RAW_DIR}/market_data.csv", index=False)

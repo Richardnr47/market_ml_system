@@ -1,8 +1,14 @@
+import sys
+
 from src.pipelines.train_pipeline import run_train_pipeline
 
 
 def main() -> None:
-    result = run_train_pipeline("configs/train.yaml")
+    config_path = "configs/train.yaml"
+    if len(sys.argv) > 1:
+        config_path = sys.argv[1]
+
+    result = run_train_pipeline(config_path)
     print(result)
 
 
