@@ -12,10 +12,11 @@ from src.data.validation import validate_market_df
 from src.features.builders import build_market_features
 from src.features.naming import build_flat_feature_names
 from src.features.selectors import select_feature_columns
-from src.features.targets import build_forward_return_target
+from src.features.targets import build_event_label_target, build_forward_return_target
 from src.features.windows import flatten_windows, make_windows
 from src.modeling.evaluation import (
     baseline_metrics,
+    classification_metrics,
     correlation_metrics,
     directional_metrics,
     optimize_long_only_threshold,
@@ -24,7 +25,7 @@ from src.modeling.evaluation import (
 )
 from src.modeling.importance import extract_feature_importance
 from src.modeling.predictors import LGBMReturnPredictor
-from src.modeling.state_models import GMMStateModel
+from src.modeling.state_models import GMMStateModel, HMMStateModel
 from src.registry.artifact_store import save_joblib, save_json
 from src.utils.debug import DebugPrinter
 from src.utils.logging import setup_logger
@@ -63,6 +64,8 @@ def run_train_pipeline(config_path: str) -> dict:
         timestamp_col = cfg["dataset"]["timestamp_col"]
         price_col = cfg["dataset"]["price_col"]
         target_horizon = cfg["dataset"]["target_horizon"]
+        target_type = str(cfg["dataset"].get("target_type", "forward_return"))
+        target_event_up_pct = float(cfg["dataset"].get("event_up_pct", 0.02))
         window_size = cfg["windows"]["size"]
         stride = cfg["windows"]["stride"]
 
@@ -85,6 +88,11 @@ def run_train_pipeline(config_path: str) -> dict:
             float(x) for x in trading_cfg.get("threshold_grid", [0.0, 0.0005, 0.001, 0.0015, 0.002, 0.003])
         ]
         recommendations_top_k = int(trading_cfg.get("recommendations_top_k", 10))
+        classification_threshold = float(cfg.get("evaluation", {}).get("classification_threshold", 0.5))
+
+        predictor_objective = str(cfg.get("predictor", {}).get("objective", "regression")).lower()
+        if target_type == "up_pct_within_horizon":
+            predictor_objective = "classification"
 
         if trading_cfg.get("long_only", True) is not True:
             dbg.warning(
@@ -129,8 +137,22 @@ def run_train_pipeline(config_path: str) -> dict:
                 ticker_col=ticker_col,
                 logger=logger,
             )
+            if target_type == "up_pct_within_horizon":
+                df = build_event_label_target(
+                    df=df,
+                    price_col=price_col,
+                    horizon=target_horizon,
+                    up_pct=target_event_up_pct,
+                    ticker_col=ticker_col,
+                    high_col="high",
+                    logger=logger,
+                )
 
-        valid_target = df["target_forward_return"].dropna()
+        model_target_col = "target_forward_return"
+        if target_type == "up_pct_within_horizon":
+            model_target_col = "target_event_up"
+
+        valid_target = df[model_target_col].dropna()
         dbg.log("TARGET", f"Valid target count: {len(valid_target)}")
 
         if len(valid_target) > 0:
@@ -155,7 +177,7 @@ def run_train_pipeline(config_path: str) -> dict:
             dbg.log("FEATURES", f"Feature preview: {feature_cols[:10]}")
 
         if runtime_cfg.get("show_nan_counts", True):
-            nan_total = int(df[feature_cols + ["target_forward_return"]].isna().sum().sum())
+            nan_total = int(df[feature_cols + [model_target_col]].isna().sum().sum())
             dbg.log("FEATURES", f"NaN count in features+target block: {nan_total}")
 
         # -------------------------------------------------
@@ -165,7 +187,7 @@ def run_train_pipeline(config_path: str) -> dict:
             wb = make_windows(
                 df=df,
                 feature_cols=feature_cols,
-                target_col="target_forward_return",
+                target_col=model_target_col,
                 timestamp_col=timestamp_col,
                 ticker_col=ticker_col,
                 window_size=window_size,
@@ -189,10 +211,26 @@ def run_train_pipeline(config_path: str) -> dict:
             y = wb.y
             ts = wb.timestamps
             tickers = wb.tickers
+            if target_type == "up_pct_within_horizon":
+                returns_lookup = (
+                    df[[ticker_col, timestamp_col, "target_forward_return"]]
+                    .rename(columns={ticker_col: "ticker", timestamp_col: "timestamp"})
+                    .copy()
+                )
+                returns_lookup["timestamp"] = pd.to_datetime(returns_lookup["timestamp"])
+                wb_meta = pd.DataFrame(
+                    {"ticker": tickers, "timestamp": pd.to_datetime(ts)}
+                ).merge(returns_lookup, on=["ticker", "timestamp"], how="left")
+                if wb_meta["target_forward_return"].isna().any():
+                    raise ValueError("Missing target_forward_return values when aligning classification windows")
+                y_returns = wb_meta["target_forward_return"].to_numpy(dtype=float)
+            else:
+                y_returns = y.copy()
 
             if runtime_cfg.get("show_shapes", True):
                 dbg.log("WINDOWS", f"Flat X shape: {X_flat.shape}")
                 dbg.log("WINDOWS", f"y shape: {y.shape}")
+                dbg.log("WINDOWS", f"y_returns shape: {y_returns.shape}")
                 dbg.log("WINDOWS", f"timestamps shape: {ts.shape}")
                 dbg.log("WINDOWS", f"tickers shape: {tickers.shape}")
 
@@ -204,6 +242,7 @@ def run_train_pipeline(config_path: str) -> dict:
 
             X_flat = X_flat[sort_order]
             y = y[sort_order]
+            y_returns = y_returns[sort_order]
             ts = ts[sort_order]
             tickers = tickers[sort_order]
 
@@ -263,7 +302,7 @@ def run_train_pipeline(config_path: str) -> dict:
         final_predictor = None
         importance_df = None
         final_fold_pred_df: pd.DataFrame | None = None
-        oof_y_true: list[np.ndarray] = []
+        oof_y_returns: list[np.ndarray] = []
         oof_y_pred: list[np.ndarray] = []
         oof_tickers: list[np.ndarray] = []
         oof_timestamps: list[np.ndarray] = []
@@ -275,9 +314,13 @@ def run_train_pipeline(config_path: str) -> dict:
                 {
                     "window_size": window_size,
                     "target_horizon": target_horizon,
+                    "target_type": target_type,
+                    "target_event_up_pct": target_event_up_pct,
                     "state_model_enabled": state_enabled,
+                    "state_model_type": cfg["state_model"].get("type", "gmm"),
                     "state_n_components": cfg["state_model"].get("n_components", 0),
                     "predictor_type": cfg["predictor"]["type"],
+                    "predictor_objective": predictor_objective,
                     "n_feature_cols": len(feature_cols),
                     "n_flat_features": len(flat_feature_names),
                     "feature_flags": str(feature_flags),
@@ -309,6 +352,7 @@ def run_train_pipeline(config_path: str) -> dict:
 
                     X_test = X_flat[split.test_start : split.test_end]
                     y_test = y[split.test_start : split.test_end]
+                    y_test_returns = y_returns[split.test_start : split.test_end]
 
                     ts_test = ts[split.test_start : split.test_end]
                     tickers_test = tickers[split.test_start : split.test_end]
@@ -318,7 +362,9 @@ def run_train_pipeline(config_path: str) -> dict:
 
                     if state_enabled:
                         with dbg.timer("STATE", f"Fold {fold_idx} fit state model"):
-                            state_model = GMMStateModel(
+                            state_model_type = str(cfg["state_model"].get("type", "gmm")).lower()
+                            state_cls = HMMStateModel if state_model_type == "hmm" else GMMStateModel
+                            state_model = state_cls(
                                 n_components=cfg["state_model"]["n_components"],
                                 random_state=cfg["state_model"]["random_state"],
                                 logger=logger,
@@ -355,20 +401,36 @@ def run_train_pipeline(config_path: str) -> dict:
                             subsample=cfg["predictor"]["subsample"],
                             colsample_bytree=cfg["predictor"]["colsample_bytree"],
                             random_state=cfg["predictor"]["random_state"],
+                            objective=predictor_objective,
                             logger=logger,
                         ).fit(X_train_meta, y_train)
 
                     with dbg.timer("PREDICTOR", f"Fold {fold_idx} predict on test"):
-                        preds = predictor.predict(X_test_meta)
+                        preds = predictor.predict_score(X_test_meta)
 
                     with dbg.timer("EVAL", f"Fold {fold_idx} evaluate predictions"):
-                        reg_metrics = regression_metrics(y_test, preds, logger=logger)
-                        base_metrics = baseline_metrics(y_test, y_train, logger=logger)
-                        dir_metrics = directional_metrics(y_test, preds, logger=logger)
-                        corr_metrics = correlation_metrics(y_test, preds, logger=logger)
+                        if predictor_objective == "classification":
+                            reg_metrics = {}
+                            base_metrics = {}
+                            dir_metrics = {}
+                            corr_metrics = {}
+                            class_metrics = classification_metrics(
+                                y_true=y_test,
+                                y_score=preds,
+                                timestamps=ts_test,
+                                threshold=classification_threshold,
+                                top_k_per_timestamp=trading_top_k_per_timestamp,
+                                logger=logger,
+                            )
+                        else:
+                            class_metrics = {}
+                            reg_metrics = regression_metrics(y_test, preds, logger=logger)
+                            base_metrics = baseline_metrics(y_test, y_train, logger=logger)
+                            dir_metrics = directional_metrics(y_test, preds, logger=logger)
+                            corr_metrics = correlation_metrics(y_test, preds, logger=logger)
                         if trading_enabled:
                             trade_metrics, trade_arrays = trading_metrics(
-                                y_true=y_test,
+                                y_true=y_test_returns,
                                 y_pred=preds,
                                 tickers=tickers_test,
                                 timestamps=ts_test,
@@ -393,6 +455,7 @@ def run_train_pipeline(config_path: str) -> dict:
                             **base_metrics,
                             **dir_metrics,
                             **corr_metrics,
+                            **class_metrics,
                             **trade_metrics,
                             "fold": fold_idx,
                             "train_size": int(len(X_train)),
@@ -429,17 +492,27 @@ def run_train_pipeline(config_path: str) -> dict:
                                 "fold": fold_idx,
                                 "ticker": tickers_test,
                                 "timestamp": ts_test,
-                                "y_true": y_test,
+                                "y_true_model": y_test,
+                                "y_true_return": y_test_returns,
                                 "y_pred": preds,
-                                "y_true_sign": (y_test > 0).astype(int),
-                                "y_pred_sign": (preds > 0).astype(int),
+                                "y_true_sign": (y_test_returns > 0).astype(int),
+                                "y_pred_sign": (
+                                    (preds >= classification_threshold).astype(int)
+                                    if predictor_objective == "classification"
+                                    else (preds > 0).astype(int)
+                                ),
                                 "signal": signal_arr,
                                 "signal_action": np.where(
                                     signal_arr > 0,
                                     "long",
                                     np.where(signal_arr < 0, "short", "flat"),
                                 ),
-                                "expected_edge": preds - trading_threshold,
+                                "expected_edge": preds
+                                - (
+                                    classification_threshold
+                                    if predictor_objective == "classification"
+                                    else trading_threshold
+                                ),
                                 "gross_return": gross_return_arr,
                                 "cost_return": cost_return_arr,
                                 "net_return": net_return_arr,
@@ -455,7 +528,7 @@ def run_train_pipeline(config_path: str) -> dict:
                         save_dataframe(fold_pred_df, pred_path, logger=logger)
                         final_fold_pred_df = fold_pred_df.copy()
 
-                    oof_y_true.append(y_test)
+                    oof_y_returns.append(y_test_returns)
                     oof_y_pred.append(preds)
                     oof_tickers.append(tickers_test)
                     oof_timestamps.append(ts_test)
@@ -472,9 +545,9 @@ def run_train_pipeline(config_path: str) -> dict:
             # -------------------------------------------------
             optimized_trade_metrics: dict[str, float] | None = None
             threshold_search_df: pd.DataFrame | None = None
-            if trading_enabled and trading_optimize_threshold and oof_y_true:
+            if trading_enabled and trading_optimize_threshold and oof_y_returns:
                 with dbg.timer("TRADING", "Optimizing prediction threshold on OOF folds"):
-                    y_oof = np.concatenate(oof_y_true)
+                    y_oof = np.concatenate(oof_y_returns)
                     pred_oof = np.concatenate(oof_y_pred)
                     tickers_oof = np.concatenate(oof_tickers)
                     ts_oof = np.concatenate(oof_timestamps)
@@ -513,18 +586,39 @@ def run_train_pipeline(config_path: str) -> dict:
                         save_dataframe(threshold_search_df, search_path, logger=logger)
 
             with dbg.timer("SUMMARY", "Aggregating fold metrics"):
-                avg_mae = float(np.mean([m["mae"] for m in all_fold_metrics]))
-                avg_r2 = float(np.mean([m["r2"] for m in all_fold_metrics]))
+                def _safe_nanmean(values: list[float]) -> float:
+                    arr = np.asarray(values, dtype=float)
+                    if not np.isfinite(arr).any():
+                        return np.nan
+                    return float(np.nanmean(arr))
+
+                avg_mae = _safe_nanmean([m.get("mae", np.nan) for m in all_fold_metrics])
+                avg_r2 = _safe_nanmean([m.get("r2", np.nan) for m in all_fold_metrics])
                 avg_directional_accuracy = float(
-                    np.nanmean([m["directional_accuracy"] for m in all_fold_metrics])
+                    _safe_nanmean([m.get("directional_accuracy", np.nan) for m in all_fold_metrics])
                 )
-                avg_pearson_corr = float(np.nanmean([m["pearson_corr"] for m in all_fold_metrics]))
-                avg_spearman_corr = float(np.nanmean([m["spearman_corr"] for m in all_fold_metrics]))
-                avg_baseline_zero_mae = float(
-                    np.mean([m["baseline_zero_mae"] for m in all_fold_metrics])
+                avg_pearson_corr = _safe_nanmean([m.get("pearson_corr", np.nan) for m in all_fold_metrics])
+                avg_spearman_corr = _safe_nanmean([m.get("spearman_corr", np.nan) for m in all_fold_metrics])
+                avg_baseline_zero_mae = _safe_nanmean(
+                    [m.get("baseline_zero_mae", np.nan) for m in all_fold_metrics]
                 )
-                avg_baseline_mean_mae = float(
-                    np.mean([m["baseline_mean_mae"] for m in all_fold_metrics])
+                avg_baseline_mean_mae = _safe_nanmean(
+                    [m.get("baseline_mean_mae", np.nan) for m in all_fold_metrics]
+                )
+                avg_classification_precision = _safe_nanmean(
+                    [m.get("classification_precision", np.nan) for m in all_fold_metrics]
+                )
+                avg_classification_recall = _safe_nanmean(
+                    [m.get("classification_recall", np.nan) for m in all_fold_metrics]
+                )
+                avg_classification_pr_auc = _safe_nanmean(
+                    [m.get("classification_pr_auc", np.nan) for m in all_fold_metrics]
+                )
+                avg_precision_at_k = _safe_nanmean(
+                    [m.get("precision_at_k", np.nan) for m in all_fold_metrics]
+                )
+                avg_hit_rate_top_ranked = _safe_nanmean(
+                    [m.get("hit_rate_top_ranked", np.nan) for m in all_fold_metrics]
                 )
                 if trading_enabled:
                     avg_trading_total_net_return = float(
@@ -557,6 +651,11 @@ def run_train_pipeline(config_path: str) -> dict:
                     "avg_spearman_corr": avg_spearman_corr,
                     "avg_baseline_zero_mae": avg_baseline_zero_mae,
                     "avg_baseline_mean_mae": avg_baseline_mean_mae,
+                    "avg_classification_precision": avg_classification_precision,
+                    "avg_classification_recall": avg_classification_recall,
+                    "avg_classification_pr_auc": avg_classification_pr_auc,
+                    "avg_precision_at_k": avg_precision_at_k,
+                    "avg_hit_rate_top_ranked": avg_hit_rate_top_ranked,
                     "avg_trading_total_net_return": avg_trading_total_net_return,
                     "avg_trading_sharpe": avg_trading_sharpe,
                     "avg_trading_max_drawdown": avg_trading_max_drawdown,
@@ -564,6 +663,8 @@ def run_train_pipeline(config_path: str) -> dict:
                     "avg_trading_win_rate": avg_trading_win_rate,
                     "n_folds": len(all_fold_metrics),
                     "feature_cols": feature_cols,
+                    "target_type": target_type,
+                    "predictor_objective": predictor_objective,
                     "state_model_enabled": state_enabled,
                     "trading_enabled": trading_enabled,
                     "trading_threshold_used": trading_threshold,
@@ -592,6 +693,11 @@ def run_train_pipeline(config_path: str) -> dict:
                 dbg.log("SUMMARY", f"avg_spearman_corr={avg_spearman_corr:.6f}")
                 dbg.log("SUMMARY", f"avg_baseline_zero_mae={avg_baseline_zero_mae:.6f}")
                 dbg.log("SUMMARY", f"avg_baseline_mean_mae={avg_baseline_mean_mae:.6f}")
+                dbg.log("SUMMARY", f"avg_classification_precision={avg_classification_precision:.6f}")
+                dbg.log("SUMMARY", f"avg_classification_recall={avg_classification_recall:.6f}")
+                dbg.log("SUMMARY", f"avg_classification_pr_auc={avg_classification_pr_auc:.6f}")
+                dbg.log("SUMMARY", f"avg_precision_at_k={avg_precision_at_k:.6f}")
+                dbg.log("SUMMARY", f"avg_hit_rate_top_ranked={avg_hit_rate_top_ranked:.6f}")
                 if trading_enabled:
                     dbg.log("SUMMARY", f"avg_trading_total_net_return={avg_trading_total_net_return:.6f}")
                     dbg.log("SUMMARY", f"avg_trading_sharpe={avg_trading_sharpe:.6f}")
@@ -623,6 +729,11 @@ def run_train_pipeline(config_path: str) -> dict:
                         "avg_spearman_corr": avg_spearman_corr,
                         "avg_baseline_zero_mae": avg_baseline_zero_mae,
                         "avg_baseline_mean_mae": avg_baseline_mean_mae,
+                        "avg_classification_precision": avg_classification_precision,
+                        "avg_classification_recall": avg_classification_recall,
+                        "avg_classification_pr_auc": avg_classification_pr_auc,
+                        "avg_precision_at_k": avg_precision_at_k,
+                        "avg_hit_rate_top_ranked": avg_hit_rate_top_ranked,
                         "avg_trading_total_net_return": avg_trading_total_net_return,
                         "avg_trading_sharpe": avg_trading_sharpe,
                         "avg_trading_max_drawdown": avg_trading_max_drawdown,
@@ -681,15 +792,15 @@ def run_train_pipeline(config_path: str) -> dict:
                                 "signal_action",
                             ]
                         ].copy()
-                        rec_df = rec_df.rename(columns={"y_pred": "predicted_return"})
-                        rec_df["expected_edge"] = rec_df["predicted_return"] - recommendation_threshold
+                        rec_df = rec_df.rename(columns={"y_pred": "predicted_score"})
+                        rec_df["expected_edge"] = rec_df["predicted_score"] - recommendation_threshold
                         rec_df["threshold_used"] = recommendation_threshold
                     else:
                         rec_df = pd.DataFrame(
                             columns=[
                                 "timestamp",
                                 "ticker",
-                                "predicted_return",
+                                "predicted_score",
                                 "expected_edge",
                                 "signal",
                                 "signal_action",

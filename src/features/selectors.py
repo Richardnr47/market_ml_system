@@ -78,18 +78,35 @@ def select_feature_columns(df_columns, feature_flags: dict) -> list[str]:
             ]
         )
 
+    if feature_flags.get("compression", False):
+        selected.extend([c for c in df_columns if c.startswith("compression_")])
+
+    if feature_flags.get("range_position", False):
+        selected.extend([c for c in df_columns if c.startswith("range_pos_") or c.startswith("range_dist_")])
+
+    if feature_flags.get("trend_quality", False):
+        selected.extend([c for c in df_columns if c.startswith("trend_efficiency_") or c.startswith("trend_quality_") or c.startswith("trend_slope_")])
+
+    if feature_flags.get("market_context", False):
+        selected.extend([c for c in df_columns if c.startswith("mkt_") or c.startswith("rel_")])
+
     if feature_flags.get("signal_lab_v1", False):
+        mean_rev_on = feature_flags.get("signal_lab_mean_reversion", True)
+        osc_on = feature_flags.get("signal_lab_oscillator", True)
+        breakout_on = feature_flags.get("signal_lab_breakout", True)
+        vol_regime_on = feature_flags.get("signal_lab_volatility", True)
+        cross_sectional_on = feature_flags.get("signal_lab_cross_sectional", True)
         selected.extend(
             [
                 c
                 for c in df_columns
-                if c.startswith("bb_z_")
-                or c.startswith("rsi_")
-                or c.startswith("stoch_")
-                or c.startswith("breakout_")
-                or c.startswith("rv_ratio_")
-                or c.startswith("trend_to_vol_")
-                or c.startswith("cs_rank_")
+                if (
+                    mean_rev_on and c.startswith("bb_z_")
+                    or osc_on and (c.startswith("rsi_") or c.startswith("stoch_"))
+                    or breakout_on and c.startswith("breakout_")
+                    or vol_regime_on and (c.startswith("rv_ratio_") or c.startswith("trend_to_vol_"))
+                    or cross_sectional_on and c.startswith("cs_rank_")
+                )
             ]
         )
 

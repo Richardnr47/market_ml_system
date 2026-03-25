@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from sklearn.metrics import mean_absolute_error, r2_score
+from sklearn.metrics import average_precision_score, precision_score, recall_score
 import logging
 
 
@@ -97,6 +98,49 @@ def correlation_metrics(
 
     if logger:
         logger.info("[EVAL] Correlation metrics: %s", metrics)
+
+    return metrics
+
+
+def classification_metrics(
+    y_true: np.ndarray,
+    y_score: np.ndarray,
+    timestamps: np.ndarray,
+    threshold: float = 0.5,
+    top_k_per_timestamp: int = 1,
+    logger: logging.Logger | None = None,
+) -> dict[str, float]:
+    y_true_bin = (y_true > 0.5).astype(int)
+    y_pred_bin = (y_score >= threshold).astype(int)
+
+    pr_auc = average_precision_score(y_true_bin, y_score)
+    precision = precision_score(y_true_bin, y_pred_bin, zero_division=0)
+    recall = recall_score(y_true_bin, y_pred_bin, zero_division=0)
+
+    eval_df = pd.DataFrame(
+        {
+            "timestamp": pd.to_datetime(timestamps),
+            "y_true": y_true_bin,
+            "y_score": y_score.astype(float),
+        }
+    ).sort_values(["timestamp", "y_score"], ascending=[True, False], kind="stable")
+
+    ranked = eval_df.groupby("timestamp")["y_score"].rank(method="first", ascending=False)
+    top_mask = ranked <= max(1, int(top_k_per_timestamp))
+    top_df = eval_df[top_mask]
+    precision_at_k = float(top_df["y_true"].mean()) if len(top_df) > 0 else np.nan
+
+    metrics = {
+        "classification_precision": float(precision),
+        "classification_recall": float(recall),
+        "classification_pr_auc": float(pr_auc),
+        "precision_at_k": precision_at_k,
+        "hit_rate_top_ranked": precision_at_k,
+        "positive_rate": float(y_true_bin.mean()),
+    }
+
+    if logger:
+        logger.info("[EVAL] Classification metrics: %s", metrics)
 
     return metrics
 

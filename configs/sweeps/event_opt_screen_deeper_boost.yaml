@@ -1,0 +1,97 @@
+experiment:
+  name: market_window_event_opt_screen_deeper_boost
+runtime:
+  mode: debug
+  log_dir: logs
+  log_file: train_event_opt_screen_deeper_boost.log
+  verbose: true
+  log_to_file: true
+  show_shapes: true
+  show_nan_counts: true
+  show_feature_preview: true
+  show_split_summary: true
+  show_fold_metrics: true
+  show_fold_table: true
+  use_tqdm: true
+dataset:
+  input_file: data/raw/market_data.csv
+  ticker_col: ticker
+  timestamp_col: timestamp
+  price_col: close
+  target_horizon: 26
+  target_type: up_pct_within_horizon
+  event_up_pct: 0.02
+features:
+  include:
+    price_basic: true
+    compression: false
+    volume_regime: false
+    range_position: true
+    trend_quality: false
+    candle_structure: true
+    market_context: true
+    technical_indicators: true
+    dollar_volume: false
+    flow_proxies: false
+    effort_result: false
+  return_lags:
+  - 1
+  - 2
+  - 5
+  vol_windows:
+  - 5
+  - 10
+  - 20
+  momentum_windows:
+  - 5
+  - 10
+  - 20
+  volume_windows:
+  - 5
+  - 20
+windows:
+  size: 20
+  stride: 1
+state_model:
+  enabled: true
+  type: gmm
+  n_components: 4
+  random_state: 42
+predictor:
+  type: lightgbm
+  objective: classification
+  learning_rate: 0.02
+  n_estimators: 900
+  num_leaves: 21
+  max_depth: 5
+  subsample: 0.8
+  colsample_bytree: 0.8
+  random_state: 42
+validation:
+  method: walk_forward
+  n_splits: 3
+  train_min_size: 18000
+  test_size: 4500
+evaluation:
+  classification_threshold: 0.5
+trading:
+  enabled: true
+  selection_mode: top_k_per_timestamp
+  top_k_per_timestamp: 1
+  prediction_threshold: 0.5
+  optimize_threshold: true
+  optimize_objective: trading_total_net_return
+  threshold_grid:
+  - 0.45
+  - 0.5
+  - 0.55
+  - 0.6
+  - 0.65
+  - 0.7
+  transaction_cost_bps: 2.0
+  periods_per_year: 6552
+  recommendations_top_k: 10
+artifacts:
+  output_dir: c:/Users/richa/.cursor/projects/market_ml_system/models/snapshots/event_opt_screen_deeper_boost
+  fold_predictions_dir: c:/Users/richa/.cursor/projects/market_ml_system/data/processed/fold_predictions_event_opt_screen_deeper_boost
+  fold_predictions_format: parquet
